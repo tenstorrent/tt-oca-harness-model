@@ -28,6 +28,9 @@ sep_cpu_ctrl_ip::sep_cpu_ctrl_ip(sc_core::sc_module_name n)
     SC_METHOD(publish_window_process);
     sensitive << window_changed_;
 
+    SC_METHOD(publish_dma_bus_err_process);
+    sensitive << dma_bus_err_changed_;
+
     register_callbacks();
 }
 
@@ -75,7 +78,19 @@ void sep_cpu_ctrl_ip::reset_handler()
         fs_ext_trng_src_sel_lock_ = false;
         nmi_vec_o.write(static_cast<uint32_t>(fs_nmi_vec_) << 1);
         publish_inbound_window();
+        dma_bus_err_changed_.notify(sc_core::SC_ZERO_TIME);
     }
+}
+
+void sep_cpu_ctrl_ip::report_dma_host_path_error()
+{
+    DMA_BUS_ERR_STATUS.host_path_err.put(1);
+    dma_bus_err_changed_.notify(sc_core::SC_ZERO_TIME);
+}
+
+void sep_cpu_ctrl_ip::publish_dma_bus_err_process()
+{
+    dma_host_path_err_o.write(DMA_BUS_ERR_STATUS.host_path_err.get() != 0);
 }
 
 // =============================================================================
@@ -252,6 +267,7 @@ bool sep_cpu_ctrl_ip::handle_write_DMA_BUS_ERR_CLEAR(DT value, DT write_bit_mask
 {
     if ((value & write_bit_mask) != 0) {
         DMA_BUS_ERR_STATUS = 0;
+        dma_bus_err_changed_.notify(sc_core::SC_ZERO_TIME);
     }
     DMA_BUS_ERR_CLEAR = 0;
     return true;

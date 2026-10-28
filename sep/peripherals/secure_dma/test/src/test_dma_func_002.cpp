@@ -1473,8 +1473,8 @@ void testbench::test_dma_chunk_done_auto_clear() {
     msg << "First chunk_done event not observed; ";
   }
 
-  // IMPORTANT: do NOT clear STATUS.chunk_done by RW1C here.
-  // Verify hardware auto-clears it when next chunk starts.
+  // Do not clear STATUS.chunk_done by RW1C: starting the next chunk clears it.
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000000);
   bool auto_clear_seen = false;
   bool second_chunk_seen = false;
   for (int i = 0; i < 800; ++i) {
@@ -1553,8 +1553,8 @@ void testbench::test_dma_error_interrupt_assert() {
   wait(10, SC_NS);
 
   // Trigger real error condition: invalid opcode with go=1
-  // CONTROL[3:0]=0x4 (invalid), CONTROL[8]=1 initial_transfer, CONTROL[31]=1 go
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000104);
+  // CONTROL[3:0]=0x5 (invalid), CONTROL[8]=1 initial_transfer, CONTROL[31]=1 go
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000105);
 
   uint32_t status = 0, intr_state = 0, error_code = 0;
   bool err_seen = false;
@@ -1631,7 +1631,7 @@ void testbench::test_dma_error_interrupt_clear() {
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000104); // invalid opcode=0x4 + go
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000105); // invalid opcode=0x5 + go
   wait(20, SC_NS);
 
   uint32_t status = 0, intr_state = 0, error_code = 0;
@@ -1689,10 +1689,19 @@ void testbench::test_dma_chunk_done_interrupt_clear() {
   m_test->apply_reset(sc_time(100, SC_NS));
   wait(20, SC_NS);
 
-  // Precondition: force chunk_done interrupt state (simple setup)
+  // Precondition: the first of two chunks raises chunk_done.
   m_test->register_write_32(secure_dma_basetest::INTR_ENABLE_OFFSET, 0x00000002);
-  m_test->register_write_32(secure_dma_basetest::INTR_TEST_OFFSET,   0x00000002);
-  wait(10, SC_NS);
+  m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2);
+  m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 8);
+  m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 4);
+  m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x10000000);
+  m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20000000);
+  m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x77);
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000100);
+  wait(100, SC_NS);
 
   m_test->register_read_32(secure_dma_basetest::INTR_STATE_OFFSET, intr_state);
   if ((intr_state & 0x2) == 0 || !dma_chunk_done_intr_signal.read()) {

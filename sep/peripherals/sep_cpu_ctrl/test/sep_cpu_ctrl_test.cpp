@@ -39,6 +39,7 @@ SC_MODULE(Tb) {
     // and keeping the default policy makes an accidental second one an error.
     sc_core::sc_signal<uint64_t> global_base_sig;
     sc_core::sc_signal<uint64_t> region_size_sig;
+    sc_core::sc_signal<bool> dma_host_path_err_sig;
 
     SC_CTOR(Tb)
         : dut("dut")
@@ -47,12 +48,14 @@ SC_MODULE(Tb) {
         , nmi_vec_sig("nmi_vec_sig")
         , global_base_sig("global_base_sig")
         , region_size_sig("region_size_sig")
+        , dma_host_path_err_sig("dma_host_path_err_sig")
     {
         isock.bind(dut.target_socket);
         dut.rst_ni(rst_n_sig);
         dut.nmi_vec_o(nmi_vec_sig);
         dut.sep_global_base_addr_o(global_base_sig);
         dut.sep_region_size_o(region_size_sig);
+        dut.dma_host_path_err_o(dma_host_path_err_sig);
         SC_THREAD(run);
     }
 
@@ -380,6 +383,25 @@ SC_MODULE(Tb) {
         assert(do_read(0x1B8) == 0);
         assert(do_read(0x1C0) == 0);
         std::cout << "[PASS] T15: DMA/PERIPH_BUS_ERR status/clear match RTL\n";
+
+        // ------------------------------------------------------------------
+        // T16: a DMA host-path error is held in host_path_err and on the
+        // interrupt port until DMA_BUS_ERR_CLEAR
+        // ------------------------------------------------------------------
+        assert(!dma_host_path_err_sig.read());
+        dut.report_dma_host_path_error();
+        wait(sc_core::SC_ZERO_TIME);
+        wait(sc_core::SC_ZERO_TIME);
+        assert(do_read(0x1A8) == 0x2ULL);
+        assert(dma_host_path_err_sig.read());
+        wait(10, sc_core::SC_NS);
+        assert(dma_host_path_err_sig.read());
+        do_write(0x1B0, 0x1ULL);
+        wait(sc_core::SC_ZERO_TIME);
+        wait(sc_core::SC_ZERO_TIME);
+        assert(do_read(0x1A8) == 0);
+        assert(!dma_host_path_err_sig.read());
+        std::cout << "[PASS] T16: DMA host-path error latches and clears\n";
 
         std::cout << "\n=== All tests PASSED ===\n";
         sc_core::sc_stop();

@@ -6,7 +6,7 @@
  *
  * This file implements comprehensive test cases for DMA Controller error detection
  * and reporting functionality covering:
- * - Opcode validation (valid opcodes 0x0-0x3, invalid opcodes 0x4-0xF)
+ * - Opcode validation (valid opcodes 0x0-0x4, invalid opcodes 0x5-0xF)
  * - Transfer size validation (zero sizes, chunk > total constraints)
  * - Pre-transfer validation (comprehensive 9-check validation)
  * - Bus error handling (TLM response error detection)
@@ -60,7 +60,8 @@ void testbench::run_func006_tests() {
   test_func006_valid_opcode_0x1_sha256();
   test_func006_valid_opcode_0x2_sha384();
   test_func006_valid_opcode_0x3_sha512();
-  test_func006_invalid_opcode_0x4_to_0xF();
+  test_func006_valid_opcode_0x4_zero_fill();
+  test_func006_invalid_opcode_0x5_to_0xF();
 
   // // Transfer Size Validation Tests (4 tests)
   test_func006_valid_transfer_sizes();
@@ -132,7 +133,7 @@ void testbench::run_func006_tests() {
  *
  * Test Objective:
  * - Confirm opcode value 0x0 (COPY) is recognized as valid
- * - Verify validate_opcode() returns true
+ * - Verify the opcode passes beat setup
  * - Verify ERROR_CODE.opcode_error is NOT set
  *
  * Pass Criteria:
@@ -191,7 +192,7 @@ void testbench::test_func006_valid_opcode_0x0_copy() {
  *
  * Test Objective:
  * - Confirm opcode value 0x1 (SHA256) is recognized as valid
- * - Verify validate_opcode() returns true
+ * - Verify the opcode passes beat setup
  * - Verify ERROR_CODE.opcode_error is NOT set
  *
  * Pass Criteria:
@@ -250,7 +251,7 @@ void testbench::test_func006_valid_opcode_0x1_sha256() {
  *
  * Test Objective:
  * - Confirm opcode value 0x2 (SHA384) is recognized as valid
- * - Verify validate_opcode() returns true
+ * - Verify the opcode passes beat setup
  * - Verify ERROR_CODE.opcode_error is NOT set
  *
  * Pass Criteria:
@@ -309,7 +310,7 @@ void testbench::test_func006_valid_opcode_0x2_sha384() {
  *
  * Test Objective:
  * - Confirm opcode value 0x3 (SHA512) is recognized as valid
- * - Verify validate_opcode() returns true
+ * - Verify the opcode passes beat setup
  * - Verify ERROR_CODE.opcode_error is NOT set
  *
  * Pass Criteria:
@@ -360,56 +361,88 @@ void testbench::test_func006_valid_opcode_0x3_sha512() {
 }
 
 // =============================================================================
-// FUNC-006 TC005: Invalid Opcode 0x4-0xF
+// FUNC-006 TC005: Opcode 0x4 (zero fill) valid, 0x5-0xF invalid
 // =============================================================================
 
+// Programs a 64-byte, 4-byte-wide OT-to-OT transfer that every check other than
+// the opcode accepts, then writes CONTROL with go=1, initial_transfer=1.
+static void func006_start_with_opcode(secure_dma_test *t, uint32_t opcode) {
+  t->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x00000000);
+  t->register_write_32(secure_dma_basetest::SRC_ADDR_HI_OFFSET, 0x00000000);
+  t->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20004000);
+  t->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
+  t->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x77);
+  t->register_write_32(secure_dma_basetest::ENABLED_MEMORY_RANGE_BASE_OFFSET, 0x20004000);
+  t->register_write_32(secure_dma_basetest::ENABLED_MEMORY_RANGE_LIMIT_OFFSET, 0x2000403F);
+  t->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+  t->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 64);
+  t->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 64);
+  t->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2);
+  t->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x1);
+  t->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000100 | (opcode & 0xF));
+}
+
 /**
- * @brief Verify CONTROL.opcode=0x4-0xF triggers ERROR_CODE.opcode_error
- *
- * Test Objective:
- * - Confirm opcode values 0x4-0xF are detected as invalid
- * - Verify validate_opcode() returns false
- * - Verify ERROR_CODE.opcode_error (bit 2) is set
- *
- * Pass Criteria:
- * - CONTROL register accepts invalid opcode write (software can write it)
- * - ERROR_CODE.opcode_error is set when validation is performed
- *
- * Architecture Reference: FUNC-006 TC086 (test_error_invalid_opcode)
- * Per detailed-design: "Invalid opcode values trigger opcode_error"
+ * @brief Verify CONTROL.opcode=0x4 (zero fill) passes opcode validation at go
  */
-void testbench::test_func006_invalid_opcode_0x4_to_0xF() {
-  std::string test_name = "FUNC-006 TC005: Invalid Opcode 0x4-0xF";
+void testbench::test_func006_valid_opcode_0x4_zero_fill() {
+  std::string test_name = "FUNC-006 TC005a: Valid Opcode 0x4 (ZERO)";
   REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
 
-  // Test a representative invalid opcode (0x4)
-  // Apply reset
   m_test->apply_reset(sc_time(100, SC_NS));
   wait(20, SC_NS);
 
-  // Write CONTROL register with invalid opcode=0x4
-  uint32_t control_val = 0x00000004; // opcode bits [3:0] = 0x4 (invalid)
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
-  wait(5, SC_NS);
+  func006_start_with_opcode(m_test.get(), 0x4);
+  wait(20, SC_NS);
 
-  // Read back CONTROL to verify register accepts the write
-  uint32_t control_readback = 0;
-  m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control_readback);
-
-  if ((control_readback & 0xF) != 0x4) {
+  uint32_t error_code = 0;
+  m_test->register_read_32(secure_dma_basetest::ERROR_CODE_OFFSET, error_code);
+  if ((error_code & 0x4) != 0) {
     passed = false;
-    msg << "CONTROL register did not accept invalid opcode 0x4 write; ";
+    msg << "ERROR_CODE.opcode_error set for opcode 0x4 (ERROR_CODE=0x" << std::hex << error_code
+        << "); ";
   }
 
-  // NOTE: Actual validation will occur when CONTROL.go is written (transfer initiation)
-  // For now, we verify the register can be written with an invalid value
-  // The validation logic is tested when integrated with FUNC-008 (go bit handling)
+  if (passed) {
+    msg << "Opcode 0x4 (ZERO) correctly passes validation";
+  }
+
+  report_test_result(test_name, passed, msg.str());
+}
+
+/**
+ * @brief Verify CONTROL.opcode=0x5-0xF sets ERROR_CODE.opcode_error at go
+ */
+void testbench::test_func006_invalid_opcode_0x5_to_0xF() {
+  std::string test_name = "FUNC-006 TC005b: Invalid Opcode 0x5-0xF";
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
+
+  bool passed = true;
+  std::stringstream msg;
+
+  for (uint32_t opcode = 0x5; opcode <= 0xF; ++opcode) {
+    m_test->apply_reset(sc_time(100, SC_NS));
+    wait(20, SC_NS);
+
+    func006_start_with_opcode(m_test.get(), opcode);
+    wait(20, SC_NS);
+
+    uint32_t error_code = 0;
+    uint32_t status = 0;
+    m_test->register_read_32(secure_dma_basetest::ERROR_CODE_OFFSET, error_code);
+    m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
+    if ((error_code & 0x4) == 0 || (status & (1U << 3)) == 0) {
+      passed = false;
+      msg << "opcode 0x" << std::hex << opcode << ": ERROR_CODE=0x" << error_code
+          << " STATUS=0x" << status << "; ";
+    }
+  }
 
   if (passed) {
-    msg << "CONTROL register accepts invalid opcode 0x4 write (validation occurs at transfer start)";
+    msg << "Opcodes 0x5-0xF all set ERROR_CODE.opcode_error and STATUS.error";
   }
 
   report_test_result(test_name, passed, msg.str());
@@ -425,7 +458,7 @@ void testbench::test_func006_invalid_opcode_0x4_to_0xF() {
  * Test Objective:
  * - Confirm non-zero TOTAL_DATA_SIZE and CHUNK_DATA_SIZE pass validation
  * - Verify CHUNK_DATA_SIZE <= TOTAL_DATA_SIZE constraint is satisfied
- * - Verify validate_transfer_size() returns true
+ * - Verify the sizes pass beat setup
  * - Verify ERROR_CODE.size_error is NOT set
  *
  * Pass Criteria:
@@ -494,7 +527,7 @@ void testbench::test_func006_valid_transfer_sizes() {
  *
  * Test Objective:
  * - Confirm TOTAL_DATA_SIZE=0 is detected as invalid
- * - Verify validate_transfer_size() returns false
+ * - Verify beat setup rejects the sizes
  * - Verify ERROR_CODE.size_error (bit 3) is set
  *
  * Pass Criteria:
@@ -547,7 +580,7 @@ void testbench::test_func006_zero_total_data_size() {
  *
  * Test Objective:
  * - Confirm CHUNK_DATA_SIZE=0 is detected as invalid
- * - Verify validate_transfer_size() returns false
+ * - Verify beat setup rejects the sizes
  * - Verify ERROR_CODE.size_error (bit 3) is set
  *
  * Pass Criteria:
@@ -599,7 +632,7 @@ void testbench::test_func006_zero_chunk_data_size() {
  *
  * Test Objective:
  * - Confirm configuration where CHUNK > TOTAL is detected
- * - Verify validate_transfer_size() handles this constraint
+ * - Verify beat setup handles this constraint
  *
  * Pass Criteria:
  * - Registers accept the writes (software can configure this)
@@ -654,7 +687,7 @@ void testbench::test_func006_chunk_greater_than_total() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() returns true when all checks pass
+ * @brief Verify the beat-setup checks all pass for a valid configuration
  *
  * Test Objective:
  * - Configure all parameters correctly
@@ -664,7 +697,7 @@ void testbench::test_func006_chunk_greater_than_total() {
  * Pass Criteria:
  * - Validation passes with no error bits set
  *
- * Architecture Reference: FUNC-006 validate_transfer_configuration() method
+ * Architecture Reference: FUNC-006 beat-setup checks (RTL DmaAddrSetup)
  * Consolidates all 9 validation checks: opcode, width, sizes, alignments, ASIDs, address widths
  */
 void testbench::test_func006_validation_all_pass() {
@@ -722,7 +755,7 @@ void testbench::test_func006_validation_all_pass() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects opcode error
+ * @brief Verify the beat-setup checks detect opcode error
  *
  * Test Objective:
  * - Configure invalid opcode
@@ -774,7 +807,7 @@ void testbench::test_func006_validation_opcode_failure() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects invalid transfer width
+ * @brief Verify the beat-setup checks detect invalid transfer width
  *
  * Test Objective:
  * - Configure invalid TRANSFER_WIDTH (0x3)
@@ -824,7 +857,7 @@ void testbench::test_func006_validation_transfer_width_failure() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects zero size error
+ * @brief Verify the beat-setup checks detect zero size error
  *
  * Test Objective:
  * - Configure zero TOTAL_DATA_SIZE
@@ -874,7 +907,7 @@ void testbench::test_func006_validation_transfer_size_failure() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects source misalignment
+ * @brief Verify the beat-setup checks detect source misalignment
  *
  * Test Objective:
  * - Configure misaligned source address for FOUR_BYTE width
@@ -928,7 +961,7 @@ void testbench::test_func006_validation_src_alignment_failure() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects destination misalignment
+ * @brief Verify the beat-setup checks detect destination misalignment
  *
  * Test Objective:
  * - Configure misaligned destination address for FOUR_BYTE width
@@ -982,7 +1015,7 @@ void testbench::test_func006_validation_dst_alignment_failure() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects invalid source ASID
+ * @brief Verify the beat-setup checks detect invalid source ASID
  *
  * Test Objective:
  * - Configure invalid source ASID (not 0x7, 0x9, 0xA)
@@ -1033,7 +1066,7 @@ void testbench::test_func006_validation_src_asid_failure() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects invalid destination ASID
+ * @brief Verify the beat-setup checks detect invalid destination ASID
  *
  * Test Objective:
  * - Configure invalid destination ASID (not 0x7, 0x9, 0xA)
@@ -1084,7 +1117,7 @@ void testbench::test_func006_validation_dst_asid_failure() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects source address width violation
+ * @brief Verify the beat-setup checks detect source address width violation
  *
  * Test Objective:
  * - Configure OT_ADDR ASID with non-zero upper 32 bits (violates 32-bit constraint)
@@ -1139,7 +1172,7 @@ void testbench::test_func006_validation_src_addr_width_failure() {
 // =============================================================================
 
 /**
- * @brief Verify validate_transfer_configuration() detects destination address width violation
+ * @brief Verify the beat-setup checks detect destination address width violation
  *
  * Test Objective:
  * - Configure OT_ADDR ASID with non-zero upper 32 bits (violates 32-bit constraint)
@@ -1584,7 +1617,8 @@ void testbench::test_error_code_bit2_opcode_error() {
   wait(10, SC_NS);
 
   // Trigger validation with invalid opcode (0x5 is reserved/invalid).
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000005); // go=1, opcode=0x5
+  // The opcode is taken only by a start with initial_transfer.
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000105); // go, initial, opcode=0x5
   wait(10, SC_NS);
 
   // Read back ERROR_CODE and check bit 2.
@@ -3041,11 +3075,18 @@ void testbench::test_func006_multiple_errors_accumulate() {
     msg << "ERROR_CODE.size_error not set (ERROR_CODE=0x" << std::hex << error_code << "); ";
   }
 
-  // Verify transfer did not run (busy should not be stuck)
+  // The error state holds busy until software clears STATUS.error.
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
-  if ((status & 0x1) != 0) {
+  if ((status & 0x1) == 0) {
     passed = false;
-    msg << "Transfer started despite hash width mismatch (STATUS.busy set); ";
+    msg << "STATUS.busy not held in the error state; ";
+  }
+  m_test->register_write_32(secure_dma_basetest::STATUS_OFFSET, 0x8);
+  m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
+  if ((status & 0x9) != 0) {
+    passed = false;
+    msg << "STATUS.busy/error not cleared by STATUS.error RW1C (STATUS=0x" << std::hex << status
+        << std::dec << "); ";
   }
 
   if (passed) {
@@ -3068,7 +3109,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  *   ENABLED_MEMORY_RANGE_LIMIT (invalid range configuration).
  * - RANGE_VALID is set so that range validation runs on transfer start.
  * - A cross-boundary transfer (e.g. OT -> SoC) is configured so that
- *   validate_range_configuration() is invoked; it detects BASE > LIMIT
+ *   beat setup detects BASE > LIMIT
  *   and sets ERROR_CODE.base_limit_error (bit 5).
  * - STATUS.error is set, dma_error interrupt asserts (with INTR_ENABLE).
  *

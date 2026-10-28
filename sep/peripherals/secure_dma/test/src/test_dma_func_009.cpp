@@ -35,9 +35,8 @@
  * - STATUS register updates throughout transfer lifecycle
  * - CONTROL.go bit auto-clear on completion
  *
- * NOTE: These tests require the transfer_engine_thread() to be fully
- * implemented in the DMA model. Tests document expected behavior and verify
- * integration points.
+ * A memory-to-memory chunk ends in idle, and the test restarts each chunk
+ * with go as firmware does.
  */
 
 #include "testbench.h"
@@ -796,6 +795,9 @@ void testbench::test_mem_to_mem_multi_chunk() {
       msg << "chunk_done did not clear after RW1C; ";
       break;
     }
+
+    // The next chunk starts on go, as firmware restarts it.
+    m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000000);
   }
 
   // Final done check
@@ -1440,6 +1442,7 @@ void testbench::test_transfer_size_1024bytes() {
       done_seen = true;
       break;
     }
+    restart_chunk_if_paused(status);
     wait(10, SC_NS);
   }
   if (!done_seen) {
@@ -1575,6 +1578,7 @@ void testbench::test_transfer_size_4096bytes() {
       done_seen = true;
       break;
     }
+    restart_chunk_if_paused(status);
     wait(10, SC_NS);
   }
   if (!done_seen) {
@@ -2534,6 +2538,9 @@ void testbench::test_dma_chunk_done_interrupt_assert() {
           << (chunk_idx + 1) << "; ";
       break;
     }
+
+    // The next chunk starts on go, as firmware restarts it.
+    m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000000);
   }
 
   // Verify final completion with done interrupt and no chunk_done assertion.
@@ -2662,6 +2669,7 @@ void testbench::test_chunk_size_not_divisor_of_total() {
       done_seen = true;
       break;
     }
+    restart_chunk_if_paused(status);
     wait(10, SC_NS);
   }
 
@@ -3217,6 +3225,7 @@ void testbench::test_src_wrap_mode() {
       done_seen = true;
       break;
     }
+    restart_chunk_if_paused(status);
     wait(10, SC_NS);
   }
   if (!done_seen) {
@@ -3358,6 +3367,7 @@ void testbench::test_dst_wrap_mode() {
       done_seen = true;
       break;
     }
+    restart_chunk_if_paused(status);
     wait(10, SC_NS);
   }
   if (!done_seen) {
@@ -3504,6 +3514,7 @@ void testbench::test_both_wrap_mode() {
       done_seen = true;
       break;
     }
+    restart_chunk_if_paused(status);
     wait(10, SC_NS);
   }
   if (!done_seen) {
@@ -3872,6 +3883,7 @@ void testbench::test_wrap_mode_chunk_boundary() {
       done_seen = true;
       break;
     }
+    restart_chunk_if_paused(status);
     wait(10, SC_NS);
   }
 

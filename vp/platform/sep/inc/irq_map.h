@@ -105,5 +105,5 @@ const unsigned int ENTROPY_POOL_STALL_IRQ   = 38;  //   [37] entropy_pool_fill_s
 const unsigned int ENTROPY_POOL_POINTER_FAULT_IRQ = 39; // [38] entropy_pool_pointer_fault
 const unsigned int TOKEN_MATCH_FAULT_IRQ          = 40; // [39] no VP source yet
 const unsigned int DMA_REG_BRIDGE_FAULT_IRQ       = 41; // [40] no VP source yet
-const unsigned int DMA_HOST_FABRIC_FAULT_IRQ      = 42; // [41] no VP source yet
+const unsigned int DMA_HOST_FABRIC_FAULT_IRQ      = 42; // [41] sep_cpu_ctrl dma_host_path_err_o
 const unsigned int PERIPH_REG_BRIDGE_FAULT_IRQ    = 43; // [42] no VP source yet

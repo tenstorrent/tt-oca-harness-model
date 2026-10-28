@@ -23,6 +23,7 @@
 //   5. name(): every enumerator has a stable, non-"?" name.
 // ===========================================================================
 
+#include "tcm_dma_policy.h"
 #include "xbar_policy.h"
 
 #include <cstdint>
@@ -299,6 +300,35 @@ int main() {
         std::printf("  [FAIL] permits(master 99, cpu_tcm) != true\n");
     }
     std::printf("  [%s] name()\n", g_failed != before_name ? "FAIL" : "PASS");
+
+    // ---- 6. sep_tcm_dma::write_refused ------------------------------------
+    const unsigned before_tcm = g_failed;
+    struct tcm_case {
+        uint64_t addr;
+        unsigned length;
+        unsigned lanes;
+        bool refused;
+    };
+    const tcm_case tcm_cases[] = {
+        {0xC0000000ULL, 4, 0xF, false},  // ICCM full word
+        {0xC0000100ULL, 4, 0x3, true},   // ICCM half word
+        {0xC0040000ULL, 4, 0x1, true},   // DCCM byte
+        {0xC005FFFCULL, 4, 0xF, false},  // last DCCM word
+        {0xC0000002ULL, 4, 0xF, true},   // misaligned
+        {0xC0000000ULL, 2, 0x3, true},   // short beat
+        {0xC0060000ULL, 4, 0x1, false},  // past the DCCM
+        {0x10000000ULL, 4, 0x1, false},  // SRAM takes byte writes
+    };
+    for (const auto& c : tcm_cases) {
+        ++g_checks;
+        if (sep_tcm_dma::write_refused(c.addr, c.length, c.lanes) != c.refused) {
+            ++g_failed;
+            std::printf("  [FAIL] write_refused(0x%llX, %u, 0x%X) != %d\n",
+                        static_cast<unsigned long long>(c.addr), c.length,
+                        c.lanes, c.refused);
+        }
+    }
+    std::printf("  [%s] tcm write rule\n", g_failed != before_tcm ? "FAIL" : "PASS");
 
     std::printf("==== %u checks, %u failed ====\n", g_checks, g_failed);
     std::printf(g_failed ? "SOME TESTS FAILED\n" : "ALL TESTS PASSED\n");
