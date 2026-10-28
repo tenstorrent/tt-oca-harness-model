@@ -327,6 +327,7 @@ private:
 
     // eFuse
     sc_signal<bool, SC_MANY_WRITERS>   efuse_locked_field_irq_sig;
+    sc_signal<bool, SC_MANY_WRITERS>   dma_host_fabric_fault_signal;
 
     // Mailbox
     sc_signal<double, SC_MANY_WRITERS> mbox_clk_signal;

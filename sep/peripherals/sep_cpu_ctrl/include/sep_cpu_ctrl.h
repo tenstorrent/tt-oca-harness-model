@@ -71,6 +71,12 @@ public:
     // SystemC rejects two processes writing one signal in the same delta.
     void publish_inbound_window();
 
+    // sep_dma_wrap's dma_host_intg_err_o: a non-OKAY response on the DMA's AXI
+    // master. It is held in DMA_BUS_ERR_STATUS.host_path_err and on this port,
+    // internal interrupt source 41, until a DMA_BUS_ERR_CLEAR write.
+    sc_core::sc_out<bool> dma_host_path_err_o{"dma_host_path_err_o"};
+    void report_dma_host_path_error();
+
     SepCpuCtrlHwifIn hwif_in;
 
     // -------------------------------------------------------------------------
@@ -107,6 +113,10 @@ private:
     // Sole driver of sep_global_base_addr_o / sep_region_size_o.
     void publish_window_process();
     sc_core::sc_event window_changed_;
+
+    // Sole driver of dma_host_path_err_o.
+    void publish_dma_bus_err_process();
+    sc_core::sc_event dma_bus_err_changed_;
 
     // -------------------------------------------------------------------------
     // Write callback handlers  (DT = regmodel::Memory<64> word type = unsigned long long)
