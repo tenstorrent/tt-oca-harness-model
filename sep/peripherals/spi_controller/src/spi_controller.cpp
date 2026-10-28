@@ -528,9 +528,8 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                 //
                 // Waiting for the watermark event (not per-word) is essential for
                 // DMA hardware handshake: SPI must not consume words until a full
-                // chunk has accumulated in the FIFO, so that the subsequent LOW→HIGH
-                // transition is visible to the DMA handshake_monitor_thread as a
-                // rising edge on lsio_trigger.
+                // chunk has accumulated in the FIFO, so that lsio_trigger is high
+                // only while a whole chunk is there for the DMA to move.
                 update_dma_trigger();
                 update_spi_event_intr_status();
                 // When TX_WATERMARK=0 (no DMA), wake on any TX word pushed.
@@ -592,10 +591,9 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
     //
     // Words are pushed one at a time. When the FIFO is full, SPI waits for
     // m_rx_space_available_event (fired from handle_read_RXDATA when DMA pops a word).
-    // dma_trigger is updated after every push so the DMA handshake_monitor_thread sees
-    // natural LOW→HIGH rising edges as the FIFO level crosses RX_WATERMARK.
-    // DMA's execute_transfer does wait(SC_ZERO_TIME) before reading lsio_trigger at each
-    // chunk boundary, ensuring signal updates have propagated before the check.
+    // dma_trigger is updated after every push, so it follows the FIFO level against
+    // RX_WATERMARK. The DMA samples the level a delta after each chunk, once the
+    // update from its last pop has propagated.
     if (success && (segment.direction == spi_direction_e::RX_ONLY ||
                    segment.direction == spi_direction_e::BIDIR)) {
 

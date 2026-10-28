@@ -12,6 +12,7 @@
 #include "secure_dma_basetest.h"
 #include "reg_logger.h"
 #include <memory>
+#include <vector>
 
 /**
  * @class secure_dma_test
@@ -320,7 +321,24 @@ public:
   unsigned m_ot_reads = 0;
   unsigned m_ot_writes = 0;
 
+  /// One bus transaction as a memory port received it. Write data is
+  /// recorded as sent; read data is not recorded.
+  struct beat {
+    char port = 0;      ///< 'O', 'C' or 'S'
+    bool write = false;
+    uint64_t addr = 0;
+    unsigned len = 0;
+    uint8_t be = 0;     ///< bit i: data byte i enabled
+    uint32_t data = 0;
+  };
+
+  /// Transactions received by the three memory ports since the last clear,
+  /// fault-injected OT ones excluded.
+  std::vector<beat> m_beats;
+
 private:
+   void record_beat(const tlm::tlm_generic_payload& trans, char port);
+
    /// RegLogger instance for test diagnostics
    RegLogger logger;
 

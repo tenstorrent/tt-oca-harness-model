@@ -11,12 +11,12 @@
  * - Hardware handshake enable/disable control via
  * CONTROL.hardware_handshake_enable
  * - Per-trigger enable/disable configuration via HANDSHAKE_INTR_ENABLE register
- * - Trigger-driven chunk transfer initiation (rising edge detection)
+ * - Trigger-driven chunk transfer initiation (level-sensitive triggers)
  * - Automatic peripheral interrupt acknowledgment mechanism (CLEAR_INTR_SRC)
  * - Interrupt clearing via OT-internal bus (CLEAR_INTR_BUS=1) and CTN/System
  * bus (=0)
  * - Continuous operation until TOTAL_DATA_SIZE completion
- * - Go-bit persistence after transfer completion
+ * - The final chunk clearing go
  * - Chunk_done interrupt suppression in hardware handshake mode
  * - Integration with transfer engine for autonomous data movement
  * - Peripheral-to-memory transfer patterns (RX FIFO drain)
@@ -37,16 +37,16 @@
  * 1. Software configures transfer (addresses, sizes, modes)
  * 2. Software enables hardware_handshake_enable bit in CONTROL
  * 3. Software enables specific trigger sources in HANDSHAKE_INTR_ENABLE
- * 4. Software sets go bit to start handshaking mode
- * 5. DMA enters WAIT_TRIGGER state, monitoring enabled lsio_trigger inputs
- * 6. When enabled trigger asserts (rising edge or level):
+ * 4. Software sets go bit to arm handshaking mode; busy stays clear
+ * 5. DMA waits in idle for an enabled lsio_trigger input to be high
+ * 6. While an enabled trigger is high (the input is a level):
  *    - DMA performs automatic interrupt clearing write (if CLEAR_INTR_SRC[N]
  * enabled)
  *    - DMA initiates chunk transfer (CHUNK_DATA_SIZE bytes)
- *    - DMA returns to WAIT_TRIGGER state
+ *    - DMA returns to idle, still busy
  * 7. Steps 6 repeats until TOTAL_DATA_SIZE bytes transferred
- * 8. DMA sets STATUS.done, asserts dma_done interrupt, but leaves go bit set
- * 9. Software must manually clear go bit to exit handshaking mode
+ * 8. DMA sets STATUS.done, asserts dma_done interrupt, and clears go and busy
+ * 9. Before that, only CONTROL.abort stops the transfer; clearing go does not
  *
  * NOTE: Chunk_done interrupt is NOT generated in hardware handshaking mode.
  * Only the final done interrupt is asserted when total size is reached.
@@ -68,7 +68,7 @@
  * - Hardware handshake enable/disable control
  * - Automatic interrupt clearing on OT-internal bus
  * - Automatic interrupt clearing on CTN/System bus
- * - Go-bit persistence after completion
+ * - The final chunk clearing go
  * - Chunk_done interrupt suppression
  * - Total size completion behavior with no response to further triggers
  * - Peripheral-to-memory transfer patterns (RX FIFO servicing)
@@ -102,7 +102,7 @@ void testbench::run_func011_tests() {
   test_hw_handshake_auto_clear_ctn_bus();
 
   // // Operational Behavior Tests (3 tests)
-  test_hw_handshake_go_bit_remains_set();
+  test_hw_handshake_final_chunk_clears_go();
   test_hw_handshake_no_chunk_done_intr();
   // test_hw_handshake_total_size_reached();
 
@@ -139,16 +139,16 @@ void testbench::run_func011_tests() {
  * 2. Configure peripheral-to-memory transfer (source fixed, destination
  * increment)
  * 3. Enable hardware_handshake_enable and HANDSHAKE_INTR_ENABLE[0]
- * 4. Set go bit to start handshaking mode
+ * 4. Set go bit to arm handshaking mode
  * 5. Assert lsio_trigger[0] for first chunk
  * 6. Poll STATUS.done bit for transfer completion (no fixed delays)
  * 7. Assert lsio_trigger[0] for subsequent chunks until TOTAL_DATA_SIZE reached
  * 8. Verify STATUS.done=1 after final chunk
  * 9. Verify destination memory contains expected data
- * 10. Verify go bit remains set after completion
+ * 10. Verify the final chunk cleared go
  *
  * Pass Criteria:
- * - DMA enters WAIT_TRIGGER state after go bit set
+ * - DMA waits in idle, busy clear, after go bit set
  * - Each trigger assertion initiates CHUNK_DATA_SIZE byte transfer
  * - All data correctly transferred from source to destination
  * - STATUS.done=1 after TOTAL_DATA_SIZE bytes transferred
@@ -227,12 +227,12 @@ void testbench::test_hw_handshake_trigger0() {
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
   wait(10, SC_NS);
 
-  // Verify DMA entered BUSY state
+  // go alone does not leave idle: busy stays clear until the first trigger.
   uint32_t status = 0;
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
-  if ((status & 0x1) == 0) { // Bit 0: busy
+  if (status & 0x1) {
     passed = false;
-    msg << "STATUS.busy not set after go-bit; ";
+    msg << "STATUS.busy set before the first trigger; ";
   }
 
   // Expected behavior: DMA is now in WAIT_TRIGGER state waiting for
@@ -286,12 +286,12 @@ void testbench::test_hw_handshake_trigger0() {
     msg << "STATUS.busy still set after completion; ";
   }
 
-  // Verify go bit remains set in hardware handshake mode
+  // The final chunk clears go.
   uint32_t control_readback = 0;
   m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control_readback);
-  if ((control_readback & 0x80000000) == 0) { // Bit 31: go
+  if (control_readback & 0x80000000) {
     passed = false;
-    msg << "CONTROL.go cleared after completion (should persist); ";
+    msg << "CONTROL.go still set after the final chunk; ";
   }
 
   // Verify destination memory contains expected data
@@ -825,42 +825,21 @@ void testbench::test_hw_handshake_auto_clear_ctn_bus() {
 }
 
 // =============================================================================
-// FUNC-011 TC014: Go Bit Remains Set After Completion
+// FUNC-011 TC014: The Final Chunk Clears Go
 // =============================================================================
 
 /**
- * @brief Verify CONTROL.go bit remains set after transfer completion in
- * hardware handshake mode
- *
- * Test Objective:
- * - Confirm go bit persistence differentiates hardware handshake from normal
- * mode
- * - Verify software must manually clear go bit to exit handshaking mode
- * - Verify STATUS.done=1 with go=1 is valid state
- * - Verify no response to further triggers after total size reached (tested
- * separately)
- *
- * Test Sequence:
- * 1. Configure and start hardware handshaking mode
- * 2. Assert triggers to complete all chunks
- * 3. Verify STATUS.done=1 after final chunk
- * 4. Read CONTROL register and verify go bit still set
- * 5. Verify STATUS.busy=0 (idle)
- * 6. Manually clear go bit via CONTROL write
- * 7. Verify go bit cleared after software write
+ * @brief Verify the final chunk of a handshake transfer clears CONTROL.go
  *
  * Pass Criteria:
- * - STATUS.done=1 after final chunk
- * - CONTROL.go=1 after completion (hardware does not clear it)
- * - STATUS.busy=0 after completion
- * - Software can clear go bit with CONTROL write
+ * - STATUS.done=1 and STATUS.busy=0 after the final chunk
+ * - CONTROL.go=0 after completion
  * - CFG_REGWEN unlocks to 0x6 after completion
  *
- * Architecture Reference: FUNC-011 TC044, Test Plan
- * test_hw_handshake_go_bit_remains_set
+ * Architecture Reference: FUNC-011 TC044
  */
-void testbench::test_hw_handshake_go_bit_remains_set() {
-  std::string test_name = "Go Bit Remains Set After Completion";
+void testbench::test_hw_handshake_final_chunk_clears_go() {
+  std::string test_name = "The Final Chunk Clears Go";
   REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
@@ -933,13 +912,12 @@ void testbench::test_hw_handshake_go_bit_remains_set() {
     msg << "STATUS.busy still set after completion; ";
   }
 
-  // Critical check: Verify CONTROL.go=1 (bit 31)
+  // The final chunk clears go, as it does outside handshake mode.
   uint32_t control_readback = 0;
   m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control_readback);
-  if ((control_readback & 0x80000000) == 0) {
+  if (control_readback & 0x80000000) {
     passed = false;
-    msg << "CONTROL.go cleared after completion (should persist in handshake "
-           "mode); ";
+    msg << "CONTROL.go still set after the final chunk; ";
   }
 
   // Verify CFG_REGWEN unlocked (0x6)
@@ -948,18 +926,6 @@ void testbench::test_hw_handshake_go_bit_remains_set() {
   if (cfg_regwen != 0x00000006) {
     passed = false;
     msg << "CFG_REGWEN not unlocked after completion; ";
-  }
-
-  // Manually clear go bit (software operation to exit handshaking mode)
-  uint32_t control_clear_go = 0x00000000; // Clear all bits including go
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_clear_go);
-  wait(5, SC_NS);
-
-  // Verify go bit cleared by software write
-  m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control_readback);
-  if (control_readback & 0x80000000) {
-    passed = false;
-    msg << "CONTROL.go not cleared by software write; ";
   }
 
   if (passed) {
@@ -1088,7 +1054,7 @@ void testbench::test_hw_handshake_no_chunk_done_intr() {
       }
 
       // Check for completion
-      // Note: STATUS.busy remains 1 during WAIT_TRIGGER (per architecture spec)
+      // Between chunks STATUS.busy stays 1 while the engine waits for a trigger.
       if (chunk == (num_chunks - 1)) {
         if (status & 0x2)
           break; // done on final chunk
@@ -1280,12 +1246,12 @@ void testbench::test_hw_handshake_total_size_reached() {
     }
   }
 
-  // Verify go bit still set
+  // The final chunk cleared go, so the spurious triggers start nothing.
   uint32_t control_readback = 0;
   m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control_readback);
-  if ((control_readback & 0x80000000) == 0) {
+  if (control_readback & 0x80000000) {
     passed = false;
-    msg << "CONTROL.go cleared unexpectedly; ";
+    msg << "CONTROL.go set after completion; ";
   }
 
   if (passed) {
@@ -1356,9 +1322,9 @@ bool testbench::run_generic_hw_handshake_test(uint32_t trigger_index,
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
   wait(10, SC_NS);
 
-  // Verify DMA entered BUSY state
+  // go alone does not leave idle: busy stays clear until the first trigger.
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
-  if ((status & 0x1) == 0) { // Bit 0: busy
+  if (status & 0x1) {
     passed = false;
   }
 
@@ -1400,10 +1366,10 @@ bool testbench::run_generic_hw_handshake_test(uint32_t trigger_index,
     passed = false;
   }
 
-  // Verify go bit remains set in hardware handshake mode
+  // The final chunk clears go.
   uint32_t control_readback = 0;
   m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control_readback);
-  if ((control_readback & 0x80000000) == 0) { // Bit 31: go
+  if (control_readback & 0x80000000) {
     passed = false;
   }
 
@@ -1422,7 +1388,7 @@ bool testbench::run_generic_hw_handshake_test(uint32_t trigger_index,
  * is issued. If the engine drains a chunk immediately on arm it reads an empty
  * peripheral FIFO (returning zero) and corrupts the transfer. This verifies
  * that, after go with hardware-handshake enabled but with NO trigger asserted,
- * the transfer is armed (busy=1) yet has moved nothing (done=0, destination
+ * the transfer is armed (go set, busy clear) yet has moved nothing (done=0, destination
  * unchanged). It then confirms the transfer still completes correctly once the
  * triggers are supplied.
  */
@@ -1479,9 +1445,12 @@ void testbench::test_hw_handshake_no_drain_before_trigger() {
 
   uint32_t status = 0;
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
-  if ((status & 0x1) == 0) {
+  uint32_t control = 0;
+  m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control);
+  if ((control & 0x80000000) == 0 || (status & 0x1)) {
     passed = false;
-    msg << "not armed (STATUS.busy=0) after go; ";
+    msg << "not armed: go must stay set and busy clear until a trigger (CONTROL=0x" << std::hex
+        << control << ", STATUS=0x" << status << std::dec << "); ";
   }
   if (status & 0x2) {
     passed = false;

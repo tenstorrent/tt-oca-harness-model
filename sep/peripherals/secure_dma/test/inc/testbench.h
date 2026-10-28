@@ -84,6 +84,22 @@ public:
    */
   void print_test_summary();
 
+  /**
+   * @brief Poll STATUS every 10 ns until done or error, restarting chunks
+   * @param max_polls Polls before giving up
+   * @param chunks Incremented once per chunk_done restart, if not null
+   * @return The last STATUS read
+   *
+   * A memory-to-memory chunk ends with STATUS.chunk_done and busy clear; the
+   * next chunk starts on CONTROL.go, without initial_transfer, as firmware
+   * restarts it.
+   */
+  uint32_t wait_done_restarting_chunks(int max_polls, unsigned *chunks = nullptr);
+
+  /// Start the next chunk if @p status shows one finished (chunk_done, busy
+  /// clear) and the transfer is neither done nor in error. True if it did.
+  bool restart_chunk_if_paused(uint32_t status);
+
 private:
   /// RegLogger instance for testbench diagnostics
   RegLogger logger;
@@ -724,7 +740,7 @@ public:
   void test_hw_handshake_auto_clear_ctn_bus();
 
   // Operational Behavior Tests (3 tests)
-  void test_hw_handshake_go_bit_remains_set();
+  void test_hw_handshake_final_chunk_clears_go();
   void test_hw_handshake_no_chunk_done_intr();
   void test_hw_handshake_total_size_reached();
 
@@ -758,7 +774,7 @@ public:
   void test_hw_trigger_ctrl_off();
   void test_abort_terminates_transfer_loop();
   void test_hw_handshake_trigger_ignored_when_go_not_set();
-  void test_hash_initial_transfer_zero_no_context();
+  void test_hash_opcode_needs_initial_transfer();
 
   // =========================================================================
   // FUNC-013: Zero Fill (CONTROL.opcode = 0x4)
@@ -773,18 +789,37 @@ public:
   void test_func013_zero_fill_iccm_window();
   void test_func013_zero_fill_source_still_validated();
   void test_func013_zero_fill_done_clears_on_start();
+
+  // =========================================================================
+  // FUNC-014: Control state machine and bus beats
+  // =========================================================================
+
+  void run_func014_tests();
+  void test_func014_one_byte_beats();
+  void test_func014_two_byte_beats();
+  void test_func014_four_byte_partial_word();
+  void test_func014_chunk_pause_and_continue();
+  void test_func014_fixed_address_writeback();
+  void test_func014_error_state_holds_busy();
+  void test_func014_abort_from_idle_and_error();
+  void test_func014_abort_keeps_digest();
+  void test_func014_status_type_interrupts();
+  void test_func014_handshake_level_and_clear_order();
+  void test_func014_initial_transfer_cleared();
+  void test_func014_base_limit_every_transfer();
+  void test_func014_soc_chunk_bound();
+  void test_func014_address_width_rules();
+  void test_func014_sha_partial_word();
+  void test_func014_digest_swap_captured();
+  void test_func014_zero_fill_chunk_pause();
+  void test_func014_range_regwen_mubi_and();
   void test_hw_handshake_auto_clear_bus_error_halts();
   void test_sha2_requires_four_byte_width_size_error();
   void test_chunk_size_exceeds_total_size_warning();
-  void test_hash_init_frees_previous_context_after_failed_transfer();
+  void test_hash_restart_after_failed_transfer();
 
-  // Coverage tests for helper/error paths not hit by FUNC-* suites
+  // Coverage tests for paths not hit by FUNC-* suites
   void run_coverage_tests();
-  void test_cov_helper_error_guards();
-  void test_cov_hash_reset_and_inactive();
   void test_cov_handshake_trigger_already_high();
-  void test_cov_invalid_asid_transaction();
-  void test_cov_bus_name_and_hash_helpers();
-  void test_cov_handshake_already_high_on_arm();
   void test_cov_hash_reset_frees_context();
 };

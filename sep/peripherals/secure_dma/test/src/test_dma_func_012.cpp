@@ -48,11 +48,11 @@ void testbench::run_func012_tests() {
   test_hw_trigger_ctrl_off();
   test_abort_terminates_transfer_loop();
   test_hw_handshake_trigger_ignored_when_go_not_set();
-  test_hash_initial_transfer_zero_no_context();
+  test_hash_opcode_needs_initial_transfer();
   test_hw_handshake_auto_clear_bus_error_halts();
   test_sha2_requires_four_byte_width_size_error();
   test_chunk_size_exceeds_total_size_warning(); 
-  test_hash_init_frees_previous_context_after_failed_transfer();
+  test_hash_restart_after_failed_transfer();
 
   REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-012 Test Suite Complete\n"
@@ -141,7 +141,7 @@ void testbench::test_hw_trigger_ctrl_off() {
 
   wait(10, SC_NS);
 
-  // Assert LISO FIFO trigger (rising edge)
+  // Assert the LSIO FIFO trigger
   m_test->set_lsio_trigger(trigger_index, true);
   wait(50, SC_NS);
   m_test->set_lsio_trigger(trigger_index, false);
@@ -182,15 +182,10 @@ void testbench::test_hw_trigger_ctrl_off() {
 // =============================================================================
 
 /**
- * @brief Verify CONTROL.abort causes transfer engine to exit loop with
- *        "Abort detected - terminating transfer loop" path
+ * @brief Verify CONTROL.abort during a data move stops the transfer
  *
  * Test Objective:
- * - Cover the execute_transfer() path where m_transfer_abort_event.triggered()
- *   is true inside the transaction loop (dma.cpp ~2927-2932)
- * - Start transfer (go=1), wait(SC_ZERO_TIME) so engine enters loop and yields,
- *   then write abort=1 and wait(SC_ZERO_TIME) so engine sees triggered() in the
- *   same delta cycle (requires wait(SC_ZERO_TIME) at loop start in model)
+ * - Start a transfer, then write abort while the engine is moving beats
  * - Verify STATUS.aborted set, STATUS.busy cleared, transfer terminated
  *
  * Pass Criteria:
@@ -198,7 +193,6 @@ void testbench::test_hw_trigger_ctrl_off() {
  * - STATUS.busy is cleared
  * - No STATUS.done (transfer aborted, not completed)
  *
- * Coverage: transfer_engine_thread / execute_transfer() abort-in-loop branch
  */
 void testbench::test_abort_terminates_transfer_loop() {
   std::string test_name =
@@ -233,12 +227,11 @@ void testbench::test_abort_terminates_transfer_loop() {
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x1);
   wait(10, SC_NS);
 
-  // Start transfer (go=1), yield so engine enters loop and hits wait(SC_ZERO_TIME)
+  // Start the transfer and let the engine begin moving beats
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000000); // go=1
   wait(SC_ZERO_TIME);
 
-  // Write abort and yield so engine runs in same delta and sees triggered()
-  // (covers "Abort detected - terminating transfer loop" in execute_transfer)
+  // Abort while a beat is in flight
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x08000000); // abort=1
   wait(SC_ZERO_TIME);
 
@@ -271,10 +264,9 @@ void testbench::test_abort_terminates_transfer_loop() {
 
 /**
  * @brief Verify that when hardware_handshake_enable=1 but go=0, lsio_trigger
- *        assertions are ignored (m_dma_busy is false - no transfer started).
+ *        assertions are ignored (no transfer starts).
  *
- * Covers handshake_monitor_thread() path: hardware_handshake_enable true,
- * !m_dma_busy -> continue (trigger not processed).
+ * With go clear and busy clear the engine stays idle whatever the triggers.
  */
 void testbench::test_hw_handshake_trigger_ignored_when_go_not_set() {
   std::string test_name =
@@ -354,19 +346,14 @@ void testbench::test_hw_handshake_trigger_ignored_when_go_not_set() {
 
 
 /**
- * @brief Verify hash transfer with initial_transfer=0 and no prior hash
- *        (m_hashing_active false): model logs WARNING and initializes hash anyway.
+ * @brief A hash opcode written without initial_transfer is not taken
  *
- * Covers handle_write_CONTROL path: is_hash_opcode && !initial_transfer,
- * !m_hashing_active -> WARNING and hash_init() recovery.
- *
- * Pass Criteria:
- * - Transfer completes with STATUS.done=1, sha2_digest_valid=1
- * - Digest matches OpenSSL reference (single 64-byte source)
+ * Only a start with CONTROL.initial_transfer captures the opcode. After reset
+ * the captured opcode is COPY, so a SHA-256 start without initial_transfer
+ * copies the data and produces no digest.
  */
-void testbench::test_hash_initial_transfer_zero_no_context() {
-  std::string test_name =
-      "Hash initial_transfer=0 with no active hash context";
+void testbench::test_hash_opcode_needs_initial_transfer() {
+  std::string test_name = "Hash opcode without initial_transfer keeps the captured opcode";
   REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
@@ -380,80 +367,41 @@ void testbench::test_hash_initial_transfer_zero_no_context() {
   for (uint32_t i = 0; i < transfer_size; i++) {
     test_data[i] = static_cast<unsigned char>(i);
   }
-
-  unsigned char reference_digest[SHA256_DIGEST_LENGTH];
-  if (!compute_sha256_reference(test_data, transfer_size, reference_digest)) {
-    passed = false;
-    msg << "OpenSSL reference computation failed; ";
-  }
-
   m_test->write_ot_memory_block(0x10000000, test_data, transfer_size);
 
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002);
-  m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET,
-                            transfer_size);
-  m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET,
-                            transfer_size);
+  m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, transfer_size);
+  m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, transfer_size);
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x10000000);
-  m_test->register_write_32(secure_dma_basetest::SRC_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20000000);
-  m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
-  uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
-  m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
-  // Hardware requires RANGE_VALID for every transfer, not just
-  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x77);
   m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
-  wait(10, SC_NS);
+  // go, opcode=SHA256, digest_swap, no initial_transfer
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000021);
 
-  // Start with go=1, initial_transfer=0, opcode=0x1 (no prior hash -> WARNING path)
-  uint32_t control_val = 0x80000001 | 0x20; // go=1, initial_transfer=0, opcode=SHA256, digest_swap=1
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
-  wait(10, SC_NS);
-
-  bool transfer_done = false;
-  uint32_t status_after = 0;
-  for (int i = 0; i < 100 && !transfer_done; i++) {
+  uint32_t status = 0;
+  for (int i = 0; i < 100 && !(status & 0xA); i++) {
     wait(10, SC_NS);
-    m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status_after);
-    transfer_done = (status_after & 0x2) != 0;
+    m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
   }
-
-  if (!transfer_done) {
+  if ((status & 0x1A) != 0x2) {
     passed = false;
-    msg << "Transfer timeout - STATUS.done not set; ";
-  }
-
-  m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status_after);
-  if ((status_after & 0x10) == 0) {
-    passed = false;
-    msg << "STATUS.sha2_digest_valid not set after hash completion; ";
-  }
-
-  unsigned char dma_digest[SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < 8; i++) {
-    uint32_t digest_word = 0;
-    m_test->register_read_32(secure_dma_basetest::SHA2_DIGEST_OFFSET + (i * 4),
-                             digest_word);
-    dma_digest[i * 4 + 0] = (digest_word >> 0) & 0xFF;
-    dma_digest[i * 4 + 1] = (digest_word >> 8) & 0xFF;
-    dma_digest[i * 4 + 2] = (digest_word >> 16) & 0xFF;
-    dma_digest[i * 4 + 3] = (digest_word >> 24) & 0xFF;
-  }
-
-  if (!compare_digests(dma_digest, reference_digest, SHA256_DIGEST_LENGTH)) {
-    passed = false;
-    msg << "SHA-256 digest mismatch; "
-        << "Expected: " << format_digest_hex(reference_digest, SHA256_DIGEST_LENGTH)
-        << " Got: " << format_digest_hex(dma_digest, SHA256_DIGEST_LENGTH)
+    msg << "expected done without error or digest, STATUS=0x" << std::hex << status << std::dec
         << "; ";
   }
-
-  if (passed) {
-    msg << "initial_transfer=0 with no prior hash: WARNING path and hash_init "
-           "recovery verified.";
+  for (uint32_t i = 0; i < transfer_size; i++) {
+    if (m_test->read_ot_memory_w_byte(0x20000000 + i) != test_data[i]) {
+      passed = false;
+      msg << "data not copied at byte " << i << "; ";
+      break;
+    }
+  }
+  if (m_model->m_hash_ctx != nullptr) {
+    passed = false;
+    msg << "a SHA-2 context was started; ";
   }
 
   report_test_result(test_name, passed, msg.str());
@@ -463,8 +411,6 @@ void testbench::test_hash_initial_transfer_zero_no_context() {
  * @brief Verify that a bus error on the automatic interrupt-clearing write
  *        halts the transfer.
  *
- * - Covers handshake_monitor_thread path: perform_interrupt_clearing_write()
- *   returns false (bus error) -> halt_transfer_on_bus_error().
  * - Mirrors secure_dma.sv DmaClearIntrSrc / DmaWaitIntrSrcResponse, where
  *   intr_clear_tlul_rsp_error raises next_error[DmaBusErr] and moves the FSM to
  *   DmaError, so the chunk is never moved.
@@ -558,9 +504,10 @@ void testbench::test_hw_handshake_auto_clear_bus_error_halts() {
     passed = false;
     msg << "STATUS.done set even though the transfer should have halted; ";
   }
-  if (status & 0x1) {
+  // The error state holds busy until software clears STATUS.error.
+  if ((status & 0x1) == 0) {
     passed = false;
-    msg << "STATUS.busy not cleared after halting on bus error; ";
+    msg << "STATUS.busy not held in the error state; ";
   }
 
   uint32_t error_code = 0;
@@ -590,7 +537,7 @@ void testbench::test_hw_handshake_auto_clear_bus_error_halts() {
 
   // =============================================================================
 // SHA-2 opcode with non-FOUR_BYTE width: ERROR_CODE.size_error set
-// Covers validate_transfer_width: is_hashing_opcode && width_encoding != 0x2
+// Inline hashing with a transfer width other than four bytes is a size error
 // =============================================================================
 
 void testbench::test_sha2_requires_four_byte_width_size_error() {
@@ -615,7 +562,8 @@ void testbench::test_sha2_requires_four_byte_width_size_error() {
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 64);
 
   // CONTROL: go=1, opcode=0x1 (SHA256) -> triggers validation
-  uint32_t control_val = 0x80000001u; // bit 31 = go, bits [3:0] = 0x1 (SHA256)
+  // go, initial_transfer (which takes the opcode), opcode=SHA256
+  uint32_t control_val = 0x80000101u;
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
   wait(20, SC_NS);
 
@@ -644,7 +592,7 @@ void testbench::test_sha2_requires_four_byte_width_size_error() {
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 64);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 64);
 
-  control_val = 0x80000002u; // go=1, opcode=0x2 (SHA384)
+  control_val = 0x80000102u; // go, initial_transfer, opcode=SHA384
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
   wait(20, SC_NS);
 
@@ -665,7 +613,7 @@ void testbench::test_sha2_requires_four_byte_width_size_error() {
 
 // =============================================================================
 // CHUNK_DATA_SIZE > TOTAL_DATA_SIZE: warning only, transfer proceeds
-// Covers validate_transfer_size() warning path (chunk_size > total_size)
+// CHUNK_DATA_SIZE above TOTAL_DATA_SIZE is not an error
 // =============================================================================
 
 void testbench::test_chunk_size_exceeds_total_size_warning() {
@@ -744,13 +692,13 @@ void testbench::test_chunk_size_exceeds_total_size_warning() {
 }
 
 // =============================================================================
-// hash_init() frees existing m_hash_ctx when starting a new hashing transfer
-// after a previous hashing transfer failed mid-way (covers 3344-3347)
+// A hashing transfer that failed mid-way leaves a live SHA-2 context; the next
+// initial transfer replaces it.
 // =============================================================================
 
-void testbench::test_hash_init_frees_previous_context_after_failed_transfer() {
+void testbench::test_hash_restart_after_failed_transfer() {
   std::string test_name =
-      "hash_init frees previous context when starting after failed hashing transfer";
+      "A hashing transfer after a failed one starts a fresh SHA-2 context";
   REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
@@ -781,10 +729,10 @@ void testbench::test_hash_init_frees_previous_context_after_failed_transfer() {
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
-  // Cause first source read to fail so transfer stops without calling hash_finalize
+  // Cause the first source read to fail, so the transfer stops before the digest
   m_test->inject_ot_read_bus_error_once();
 
-  // Start first hashing transfer: hash_init sets m_hash_ctx; first transaction fails
+  // The first hashing transfer starts a context, then its first read fails.
   uint32_t control_val = 0x80000100u | 0x1u;  // go, initial_transfer, SHA256
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
   wait(50, SC_NS);
@@ -796,17 +744,11 @@ void testbench::test_hash_init_frees_previous_context_after_failed_transfer() {
     msg << "First transfer should set STATUS.error (bus error); ";
   }
 
-  // Wait until DMA is idle (busy cleared)
-  uint32_t poll = 0;
-  while (poll < 100) {
-    wait(10, SC_NS);
-    m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
-    if ((status & 0x1) == 0) break;  // busy clear
-    poll++;
-  }
+  // Clearing STATUS.error leaves the error state.
+  m_test->register_write_32(secure_dma_basetest::STATUS_OFFSET, 0x8);
 
-  // Start second hashing transfer: hash_init runs again with m_hash_ctx != nullptr
-  // and frees it (covers the block at 3344-3347)
+  // The second transfer starts a fresh SHA-2 context in place of the live one.
+  uint32_t poll = 0;
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
   wait(10, SC_NS);
 
