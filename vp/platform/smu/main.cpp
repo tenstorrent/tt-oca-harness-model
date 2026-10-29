@@ -8,6 +8,9 @@
 // platform, run, drain UART.
 //
 //   smu-vp <smc-cci-ini> <smc-elf> <sep-cci-ini> <sep-elf> [sim_time_ms]
+//
+// <smc-elf> may be `none`: the SMC cores then start at the boot ROM base and
+// run the image dut.bootrom.init_file loads.
 // ===========================================================================
 
 #include "smu_platform.hpp"
@@ -161,7 +164,9 @@ int sc_main(int argc, char** argv)
     }
 
     const std::string smc_ini = std::filesystem::absolute(argv[1]).lexically_normal().string();
-    const std::string smc_elf = std::filesystem::absolute(argv[2]).lexically_normal().string();
+    const bool smc_rom_only   = std::string(argv[2]) == "none";
+    const std::string smc_elf =
+        smc_rom_only ? std::string() : std::filesystem::absolute(argv[2]).lexically_normal().string();
     const std::string sep_ini = std::filesystem::absolute(argv[3]).lexically_normal().string();
     const std::string sep_elf = std::filesystem::absolute(argv[4]).lexically_normal().string();
     const double sim_time_ms  = (argc >= 6) ? std::stod(argv[5]) : 50.0;
@@ -174,9 +179,15 @@ int sc_main(int argc, char** argv)
     }
 
     const std::string smc_top = "dut";
-    uint64_t entry = read_elf64_entry(smc_elf);
-    if (entry == UINT64_MAX) return 1;
-    std::cout << "smu-vp: SMC ELF '" << smc_elf << "' entry=0x" << std::hex << entry << std::dec << "\n";
+    uint64_t entry = smc::smc_platform::BOOTROM_BASE;
+    if (smc_rom_only) {
+        std::cout << "smu-vp: no SMC ELF; SMC cores start at the boot ROM base 0x" << std::hex
+                  << entry << std::dec << "\n";
+    } else {
+        entry = read_elf64_entry(smc_elf);
+        if (entry == UINT64_MAX) return 1;
+        std::cout << "smu-vp: SMC ELF '" << smc_elf << "' entry=0x" << std::hex << entry << std::dec << "\n";
+    }
     apply_smc_default_presets(smc_top, entry);
 
     {
@@ -236,7 +247,7 @@ int sc_main(int argc, char** argv)
     // standalone smc-vp INI keys (`dut.cluster.*`) apply unchanged.
     smu::smu_platform plat{smc_top.c_str(), "och_sep_ss1"};
 
-    if (!plat.dut.cluster.load_elf({smc_elf})) {
+    if (!smc_rom_only && !plat.dut.cluster.load_elf({smc_elf})) {
         std::cerr << "ERROR: cluster.load_elf failed for '" << smc_elf << "'\n";
         return 1;
     }

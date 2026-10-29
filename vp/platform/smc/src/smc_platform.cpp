@@ -21,7 +21,7 @@ namespace smc {
 // ---------------------------------------------------------------------------
 static constexpr uint64_t A_WDT_DEBUG   = 0xC000'0000ULL;
 static constexpr uint64_t A_CPU_CTRL_FP  = 0xC003'9000ULL;  // cluster.ctrl (cpu_ctrl.rdl)
-static constexpr uint64_t A_BOOTROM      = 0xC004'0000ULL;
+static constexpr uint64_t A_BOOTROM      = smc::smc_platform::BOOTROM_BASE;
 static constexpr uint64_t A_SCRATCH      = 0xC006'0000ULL;
 // Cluster-internal interrupt/error blocks (smc_addrmap_pkg SMC_TOP_SMC_CLUSTER_*).
 // These sit above the fabric's 16 MB local-alias window, so the harts reach them

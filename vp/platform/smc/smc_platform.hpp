@@ -79,6 +79,8 @@ public:
     static constexpr unsigned NUM_TELEMETRY = 3;
     static constexpr unsigned NUM_PLIC_SRC   = 336;
     static constexpr unsigned NUM_PLIC_CTX   = 8;
+    // Boot ROM base: where the cores start when no ELF supplies an entry point.
+    static constexpr uint64_t BOOTROM_BASE  = 0xC004'0000ULL;
     static constexpr unsigned NUM_SUBSYS     = 32;
     // SEP mailbox channels feeding peripheral_interrupts_o[7:0] (sep_pkg::NUM_MAILBOXES).
     static constexpr unsigned NUM_SEP_MAILBOX = 8;

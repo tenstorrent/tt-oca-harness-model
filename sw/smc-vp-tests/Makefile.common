@@ -90,8 +90,11 @@ dump: $(TARGET)
 
 # Run the firmware on smc-vp.  The VP runs a bounded simulation window
 # (SIM_TIME_MS) then exits; the firmware prints PASS/FAIL to UART0.
+# SIM_ELF is the ELF argument smc-vp loads; a ROM-only test passes `none`.
+SIM_ELF ?= $(TARGET)
+
 sim: $(TARGET)
-	$(VP) $(VP_FLAGS) $(TARGET) $(SIM_TIME_MS)
+	$(VP) $(VP_FLAGS) $(SIM_ELF) $(SIM_TIME_MS)
 
 clean:
 	rm -f $(OBJS) $(TARGET) $(TARGET).dump $(TARGET).sym

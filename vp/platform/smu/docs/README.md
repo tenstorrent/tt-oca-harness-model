@@ -84,6 +84,12 @@ Example (from `sw/smu-vp-tests/smu-link-test/`):
     ../../../vp/platform/smu/config/sep_smu_config.ini smu_link_sep 50
 ```
 
+`<smc-elf>` may be `none`. The SMC cores then start at the boot ROM base
+`0xC004_0000` and run the image `dut.bootrom.init_file` loads, so the SMC ini
+must name one. `smu-vp` changes to the SEP ini's directory, so give that path
+absolutely. `sw/smu-vp-tests/smu-rom-boot-test` runs this way, with its own
+`smc.ini`.
+
 Both subsystems keep their standalone CCI namespaces: the SMC platform is
 `dut` (smc-vp inis apply unchanged) and the SEP platform is `och_sep_ss1`
 (sep-vp inis apply unchanged; `smu-vp` overrides `targets` with the
