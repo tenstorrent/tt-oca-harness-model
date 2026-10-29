@@ -57,6 +57,43 @@ so fetches currently share the data path internally.
 Debug API used by benches and `smc-vp`: `load_elf`, `hart(i)`,
 `inject_nmi`, `whisper_system()`.
 
+====== Core reset
+
+`RESET_CTRL` and `CORE_RESET_PULSE_COUNT` follow the RTL
+(`smc_cpu_ctrl_wrap`, `prim_pulse_signal`):
+
+* `coreN_reset_n` (bits 3:0, active low) holds hart _N_ in reset while 0.
+  When it is released, the hart restarts at `RESET_VECTOR[N]`.
+* Writing 1 to `coreN_reset_pulse_start` (bits 7:4) starts a pulse on that
+  core alone. The core keeps the reset level it had for
+  `pre_reset_count + 1` SMC clocks, is held in reset for
+  `post_reset_count + 1` clocks, then restarts at `RESET_VECTOR[N]`. A start
+  during a pulse restarts the count of its current phase. The pulse bits
+  are not stored and read 0.
+* `core_resets_done` (bits 35:32 of `CORE_RESET_PULSE_COUNT`) reads 0 while a
+  core's pulse runs, and ignores writes.
+* A level 0 holds the core for the whole of a pulse.
+* Core resets do not drain or isolate: memory stays reachable while a hart
+  is held or pulsed.
+* These 64-bit registers and `RESET_VECTOR[N]` take narrower accesses at any
+  byte lane, so an RV32 agent reaches them in 32-bit halves.
+
+The pulse is timed with the `clk_smc_period_ns` parameter. A hart thread
+samples its reset between instruction batches, so the model latches each
+assertion and resets the hart, in its own thread, when the reset releases.
+
+====== Custom instructions
+
+Rocket's `CFLUSH.D.L1 rs1` (`0xFC000073`, any `rs1`) writes back and
+invalidates the L1 data cache: all of it for `rs1 = x0`, or the line
+holding the address in `rs1`. SMC firmware uses it before handing memory
+to another agent. The cluster has no data cache, so the Whisper backend
+retires the instruction in `step()` without effect, advancing the PC by 4,
+before Whisper would trap it as illegal. It reads the instruction as two
+16-bit parcels, since with C it may sit at a 2-byte boundary and the boot
+ROM rejects an unaligned word read. Rocket accepts it only in M-mode, so in
+S- or U-mode it reaches Whisper and traps as illegal.
+
 ====== CCI parameters
 
 Sizing knobs are immutable. Quantum and AMO detect are mutable.
@@ -70,7 +107,7 @@ Sizing knobs are immutable. Quantum and AMO detect are mutable.
 |`mem_size` |4 GiB |Whisper address space
 |`fast_mem_lo` / `fast_mem_hi` |0 / `0x80000000` |Internal buffer window
 |`mmio_lo` / `mmio_hi` |`0x80000000` / `0x90000000` |MMIO carve-out (`smc-vp` presets `0xC0000000`..`0xC1000000`)
-|`isa` |`rv64imafdc` |Whisper ISA string
+|`isa` |`rv64imafdc` |Whisper ISA string (`smc-vp` and `smu-vp` preset `rv64imafdcsu_zba_zbb_zbs`, the cores' S- and U-mode and Zba, Zbb and Zbs)
 |`quantum_ns` |1000 |TLM quantum
 |`quantum_insts` |1000 |Instructions per `step(K)`
 |`amo_lock_detect` |true |Best-effort `prot[3]` on AMO / LR-SC
@@ -78,6 +115,7 @@ Sizing knobs are immutable. Quantum and AMO detect are mutable.
 |`ctrl_size_bytes` |`0x1000` |CPU-control window
 |`local_base_default` |`0xC0000000` |Strap / debug
 |`wdt_stage2_tick_ns` |100.0 |0 disables auto-tick
+|`clk_smc_period_ns` |1.25 |SMC clock period; times the reset pulse counts
 |===
 
 A legacy `config` struct remains for construction; broker presets

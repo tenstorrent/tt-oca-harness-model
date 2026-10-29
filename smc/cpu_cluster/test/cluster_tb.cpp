@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <sstream>
 #include <stdexcept>
@@ -125,6 +126,9 @@ public:
     uint8_t      last_prot      = 0;
     bool         last_locked    = false;
     unsigned     write_calls    = 0;
+    unsigned     writer_mask    = 0;   // bit per AXI ID that wrote
+    bool         reject_misaligned = false;   // as the boot ROM does
+    sc_core::sc_time added_delay = sc_core::SC_ZERO_TIME;
     std::map<uint64_t, uint8_t> mem;
 
     SC_HAS_PROCESS(InspectingRamStub);
@@ -151,9 +155,13 @@ public:
         return v;
     }
 
-    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time&)
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay)
     {
+        delay += added_delay;
         if (auto* ext = trans.get_extension<smc::smc_axi_extension>()) {
+            if (trans.get_command() == tlm::TLM_WRITE_COMMAND) {
+                writer_mask |= 1u << ext->axi_id;
+            }
             saw_extension  = true;
             last_source_id = ext->source_id;
             last_axi_id    = ext->axi_id;
@@ -163,6 +171,10 @@ public:
         const uint64_t addr = trans.get_address();
         const unsigned len  = trans.get_data_length();
         uint8_t* ptr = trans.get_data_ptr();
+        if (reject_misaligned && (addr % len) != 0) {
+            trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+            return;
+        }
         if (trans.get_command() == tlm::TLM_WRITE_COMMAND) {
             ++write_calls;
             for (unsigned i = 0; i < len; ++i) mem[addr + i] = ptr[i];
@@ -844,6 +856,9 @@ struct cluster_tb_top : sc_core::sc_module
         // --- smc_axi_extension (hart 0) ---------------------------------------
         {
             constexpr uint64_t MMIO = 0x80000000ULL;
+            // A debug access carries the AXI ID of the hart that ran last, so
+            // let hart 0, the only one released, run a few quanta first.
+            wait(sc_core::sc_time(5, sc_core::SC_US));
             auto& h = cluster.hart(0);
             h.reset();
             smc_test::smc_master m(h);
@@ -923,6 +938,54 @@ struct cluster_tb_top : sc_core::sc_module
             h.poke_mip(smc_test::MIP_MTIP);
             EXPECT_FALSE(h.is_wfi());
             pass("step() and WFI flag");
+        }
+
+        // --- CFLUSH.D.L1 retires without effect (hart 0) ----------------------
+        {
+            auto& h = cluster.hart(0);
+            constexpr uint32_t OP_CFLUSH_D_L1_X0 = 0xFC000073u; // cflush.d.l1 x0
+            constexpr uint32_t OP_CFLUSH_D_L1_A0 = 0xFC050073u; // cflush.d.l1 a0
+            const uint32_t program[] = {
+                OP_CFLUSH_D_L1_X0, OP_CFLUSH_D_L1_A0, smc_test::OP_ADDI_X1_X0_5,
+                smc_test::OP_J_SELF,
+            };
+            for (unsigned k = 0; k < sizeof(program) / sizeof(program[0]); ++k) {
+                ASSERT_TRUE(h.mem_write(RESET_PC + 4 * k, 4, program[k]));
+            }
+            h.poke_mip(0);
+            h.set_reset_pc(RESET_PC);
+            h.reset();
+            h.step();
+            EXPECT_EQ(h.get_pc(), RESET_PC + 0x04);
+            EXPECT_FALSE(h.last_commit().trapped);
+            EXPECT_EQ(h.last_commit().opcode, OP_CFLUSH_D_L1_X0);
+            EXPECT_EQ(h.last_commit().pc, RESET_PC);
+            h.step();
+            EXPECT_EQ(h.get_pc(), RESET_PC + 0x08);
+            EXPECT_FALSE(h.last_commit().trapped);
+            EXPECT_EQ(h.last_commit().opcode, OP_CFLUSH_D_L1_A0);
+            h.step();
+            EXPECT_EQ(h.get_pc(), RESET_PC + 0x0C);
+            EXPECT_EQ(h.last_commit().opcode, smc_test::OP_ADDI_X1_X0_5);
+
+            // At a 2-byte boundary, on a target that rejects unaligned reads.
+            constexpr uint64_t ROM_PC = 0x80000800ULL;
+            constexpr uint16_t OP_C_NOP = 0x0001u;
+            bus_mmio.seed(ROM_PC, OP_C_NOP, 2);
+            bus_mmio.seed(ROM_PC + 2, OP_CFLUSH_D_L1_X0, 4);
+            bus_mmio.seed(ROM_PC + 6, smc_test::OP_J_SELF, 4);
+            bus_mmio.reject_misaligned = true;
+            h.set_reset_pc(ROM_PC);
+            h.reset();
+            h.step();
+            h.step();
+            bus_mmio.reject_misaligned = false;
+            EXPECT_FALSE(h.last_commit().trapped);
+            EXPECT_EQ(h.last_commit().opcode, OP_CFLUSH_D_L1_X0);
+            EXPECT_EQ(h.get_pc(), ROM_PC + 6);
+            h.set_reset_pc(RESET_PC);
+            h.reset();
+            pass("CFLUSH.D.L1 retires without a trap");
         }
 
         // --- IRQ aggregator (needs sc_start) ----------------------------------
@@ -1150,22 +1213,137 @@ struct cluster_tb_top : sc_core::sc_module
             pass("batch step and data-path TLM error handling");
         }
 
-        // --- RESET_CTRL park and NMI wake (coverage) ---------------------------
+        // --- RESET_CTRL per-core reset pulse and hold (RTL smc_cpu_ctrl_wrap) ---
         {
-            ctrl.write32(0x020, 0x1u);
-            wait(sc_core::sc_time(10, sc_core::SC_MS));
-            const uint64_t pc_running = cluster.hart(0).get_pc();
-            ctrl.write32(0x020, 0x0u);
-            wait(sc_core::sc_time(20, sc_core::SC_MS));
-            EXPECT_EQ(cluster.hart(0).get_pc(), pc_running);
+            constexpr uint32_t OP_ADDI_X1_X1_1 = 0x00108093u; // addi x1, x1, 1
+            constexpr uint32_t OP_J_BACK_4     = 0xFFDFF06Fu; // j .-4
+            constexpr uint64_t ALT_PC          = 0x200;
+            constexpr uint64_t RESET_VECTOR_0  = 0x000;
+            constexpr uint64_t RESET_CTRL      = 0x020;
+            constexpr uint64_t PULSE_COUNT     = 0x028;
+            constexpr uint64_t DONE_CORE0      = 1ULL << 32;
+            constexpr uint64_t DONE_ALL        = 0xFULL << 32;
+            constexpr uint32_t CSR_MINSTRET    = 0xB02;
+            auto& h0 = cluster.hart(0);
+            for (const uint64_t base : {RESET_PC, ALT_PC}) {
+                ASSERT_TRUE(h0.mem_write(base, 4, OP_ADDI_X1_X1_1));
+                ASSERT_TRUE(h0.mem_write(base + 4, 4, OP_J_BACK_4));
+            }
+            const auto in_loop = [](uint64_t pc, uint64_t base) {
+                return pc == base || pc == base + 4;
+            };
 
-            ctrl.write32(0x020, 0x1u);
-            wait(sc_core::sc_time(10, sc_core::SC_MS));
+            // Hold every core, then release them all: each restarts at its vector.
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                ctrl.write64(RESET_VECTOR_0 + 8 * i, RESET_PC);
+            }
+            ctrl.write32(RESET_CTRL, 0x100u);
+            wait(sc_core::sc_time(1, sc_core::SC_US));
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                EXPECT_TRUE(in_loop(cluster.hart(i).get_pc(), RESET_PC));
+            }
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_ALL, DONE_ALL);
+
+            // A pulse on core 0 restarts hart 0 alone, at the new RESET_VECTOR[0].
+            ctrl.write64(RESET_VECTOR_0, ALT_PC);
+            const uint64_t h1_instret = cluster.hart(1).read_csr(CSR_MINSTRET);
+            ctrl.write32(RESET_CTRL, 0x11Fu);
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_ALL, DONE_ALL & ~DONE_CORE0);
+            EXPECT_EQ(ctrl.read64(RESET_CTRL), 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_ALL, DONE_ALL);
+            EXPECT_TRUE(in_loop(h0.get_pc(), ALT_PC));
+            for (unsigned i = 1; i < NHARTS; ++i) {
+                EXPECT_TRUE(in_loop(cluster.hart(i).get_pc(), RESET_PC));
+            }
+            EXPECT_TRUE(cluster.hart(1).read_csr(CSR_MINSTRET) > h1_instret);
+
+            // The counts are read-write; the done bits ignore writes.
+            ctrl.write64(PULSE_COUNT, 0x0000'0000'0020'0004ULL);
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT), 0x0000'000F'0020'0004ULL);
+            ctrl.write64(PULSE_COUNT, 0x0000'000F'0010'0008ULL);
+
+            // An RV32 agent reaches these registers in 32-bit halves.
+            EXPECT_EQ(ctrl.read32(PULSE_COUNT + 4), 0xFu);
+            EXPECT_EQ(ctrl.read32(RESET_CTRL + 4), 0u);
+            ctrl.write32(RESET_VECTOR_0 + 4, 0x1u);
+            ctrl.write32(RESET_VECTOR_0, 0x200u);
+            EXPECT_EQ(ctrl.read64(RESET_VECTOR_0), 0x0000'0001'0000'0200ULL);
+            ctrl.write64(RESET_VECTOR_0, ALT_PC);
+
+            // A level 0 holds hart 0, through a pulse too; release restarts it.
+            ctrl.write32(RESET_CTRL, 0x10Eu);
+            wait(sc_core::sc_time(1, sc_core::SC_US));
+            const uint64_t held_pc      = h0.get_pc();
+            const uint64_t held_instret = h0.read_csr(CSR_MINSTRET);
+            ctrl.write32(RESET_CTRL, 0x11Eu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_EQ(h0.get_pc(), held_pc);
+            EXPECT_EQ(h0.read_csr(CSR_MINSTRET), held_instret);
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_ALL, DONE_ALL);
+            ctrl.write64(RESET_VECTOR_0, RESET_PC);
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_TRUE(in_loop(h0.get_pc(), RESET_PC));
+
+            // A start during the held phase restarts its count. At 1.25 ns per
+            // clock the defaults give 11.25 ns before the hold and 21.25 ns of it.
+            ctrl.write32(RESET_CTRL, 0x11Fu);
+            wait(sc_core::sc_time(15, sc_core::SC_NS));
+            ctrl.write32(RESET_CTRL, 0x11Fu);
+            wait(sc_core::sc_time(20, sc_core::SC_NS));
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_CORE0, 0u);
+            wait(sc_core::sc_time(25, sc_core::SC_NS));
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_CORE0, DONE_CORE0);
+
+            pass("RESET_CTRL per-core reset pulse, hold and release");
+        }
+
+        // --- concurrent stores to a target slower than the quantum -----------
+        // Each store's delay reaches the quantum inside Whisper's store, which
+        // holds a mutex every hart shares; the harts must not yield there.
+        {
+            constexpr uint64_t STORE_PC    = 0x300;
+            constexpr uint64_t RESET_CTRL  = 0x020;
+            constexpr uint32_t program[] = {
+                0x00100113u, // addi x2, x0, 1
+                0x01F11113u, // slli x2, x2, 31        (MMIO base 0x80000000)
+                0x10013023u, // sd   x0, 0x100(x2)
+                0xFFDFF06Fu, // j    .-4
+            };
+            for (unsigned k = 0; k < std::size(program); ++k) {
+                ASSERT_TRUE(cluster.hart(0).mem_write(STORE_PC + 4 * k, 4, program[k]));
+            }
+            ctrl.write32(RESET_CTRL, 0x100u);
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                ctrl.write64(8 * i, STORE_PC);
+            }
+            bus_mmio.writer_mask = 0;
+            bus_mmio.added_delay = tlm::tlm_global_quantum::instance().get();
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_EQ(bus_mmio.writer_mask, (1u << NHARTS) - 1);
+
+            ctrl.write32(RESET_CTRL, 0x100u);
+            bus_mmio.added_delay = sc_core::SC_ZERO_TIME;
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                ctrl.write64(8 * i, RESET_PC);
+            }
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+
+            pass("concurrent stores to a target slower than the quantum");
+        }
+
+        // --- NMI wake (coverage) -------------------------------------------------
+        {
             cluster.inject_nmi(0, 0x5u);
             wait(sc_core::sc_time(2, sc_core::SC_MS));
             EXPECT_FALSE(cluster.hart(0).is_wfi());
 
-            pass("RESET_CTRL park and NMI wake");
+            pass("NMI wake");
         }
 
         // --- branch coverage: ctrl lengths, fast-mem edge, batch step ---------

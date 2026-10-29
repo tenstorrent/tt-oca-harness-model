@@ -44,6 +44,13 @@ smu_platform::smu_platform(const char* smc_name, const char* sep_name)
     // SEP outbound (RTL smn_outbound_axi).
     sep.sep_smn_outbound_axi.bind(xbar.sep_out);
 
+    // The SEP drives its eFuse lifecycle to the SMC's CHIP_CONFIG.LC_STATE
+    // (smu.sv: sep lc_state_o -> smc lc_state_i), and the SMC follows the fuse.
+    sep.set_lc_state_listener([this](uint32_t code) {
+        dut.stub_misc_wrap.set_reset_value(smc::smc_platform::MISC_WRAP_LC_STATE_OFFSET,
+                                           code & 0xFFu);
+    });
+
     // Unused SMC inbound ports.
     idle_jtag.sock.bind(dut.jtag_axi_in);
 

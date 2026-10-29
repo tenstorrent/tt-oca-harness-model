@@ -1175,6 +1175,9 @@ void och_sep_ss::start_of_simulation() {
         in.security_disable = sep_efuse->get_security_disable();
         in.secure_tm        = sep_efuse->get_secure_tm();
         lc_ctrl->set_inputs(in);
+        if (lc_state_listener_) {
+            lc_state_listener_(in.lc_state_code);
+        }
     };
 
     // sep.sv:952 gives feat_ctrl_o.sep_debug to the inbound filter's filter_skip_i, and

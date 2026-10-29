@@ -21,7 +21,7 @@ namespace smc {
 // ---------------------------------------------------------------------------
 static constexpr uint64_t A_WDT_DEBUG   = 0xC000'0000ULL;
 static constexpr uint64_t A_CPU_CTRL_FP  = 0xC003'9000ULL;  // cluster.ctrl (cpu_ctrl.rdl)
-static constexpr uint64_t A_BOOTROM      = 0xC004'0000ULL;
+static constexpr uint64_t A_BOOTROM      = smc::smc_platform::BOOTROM_BASE;
 static constexpr uint64_t A_SCRATCH      = 0xC006'0000ULL;
 // Cluster-internal interrupt/error blocks (smc_addrmap_pkg SMC_TOP_SMC_CLUSTER_*).
 // These sit above the fabric's 16 MB local-alias window, so the harts reach them
@@ -396,6 +396,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[16].bind(stub_periph_misc.reg_socket);
     periph_router.out[17].bind(stub_misc_wrap.reg_socket);
     stub_misc_wrap.set_reset_value(0, STUB_MAGIC_MISC);
+    stub_misc_wrap.set_reset_value(MISC_WRAP_LC_STATE_OFFSET, LC_STATE_RESET);
     periph_router.out[27].bind(stub_ndm_reset.reg_socket);
     periph_router.out[18].bind(stub_efuse_map.reg_socket);
     stub_efuse_map.set_reset_value(0, STUB_MAGIC_EFUSE_MAP);

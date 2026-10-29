@@ -41,14 +41,17 @@ Source: `test/cluster_tb.cpp`. Names are the `[PASS]` titles.
 |4 |memory routing (fast-mem + MMIO) |Socket carve-out |Positive
 |5 |smc_axi_extension on MMIO transactions |Sideband on `mmio` |Positive
 |6 |step() and WFI flag |ISS step / WFI park |Positive
-|7 |IRQ aggregator and WFI wake |MSIP/MTIP/MEIP → MIP |Positive
-|8 |CPU configures PLIC, handles MEIP |CPU→PLIC→CPU |Positive
-|9 |scratchpad SRAM INIT_MEM_DONE handshake |Peer hook |Positive
-|10 |CPU-Control register file |`ctrl` CSRs |Positive
-|11 |CPU-Control negative paths and CSR edge cases |Bad access |Negative
-|12 |batch step and data-path TLM error handling |Error on `data` |Negative
-|13 |RESET_CTRL park and NMI wake |Park / `inject_nmi` |Positive
-|14 |ctrl access widths, fast-mem edge, and batch step branches |Widths / edges |Mixed
+|7 |CFLUSH.D.L1 retires without a trap |`cflush.d.l1 x0` and `a0` advance the PC without a trap, also at a 2-byte boundary on a target that rejects unaligned reads |Positive
+|8 |IRQ aggregator and WFI wake |MSIP/MTIP/MEIP → MIP |Positive
+|9 |CPU configures PLIC, handles MEIP |CPU→PLIC→CPU |Positive
+|10 |scratchpad SRAM INIT_MEM_DONE handshake |Peer hook |Positive
+|11 |CPU-Control register file |`ctrl` CSRs |Positive
+|12 |CPU-Control negative paths and CSR edge cases |Bad access |Negative
+|13 |batch step and data-path TLM error handling |Error on `data` |Negative
+|14 |RESET_CTRL per-core reset pulse, hold and release |A pulse restarts one hart at its `RESET_VECTOR` while the others run; `core_resets_done` falls and rises; pulse bits are not stored and done bits ignore writes; 32-bit halves reach the 64-bit registers; a level 0 holds a hart through a pulse and release restarts it; a start in the held phase restarts its count |Positive
+|15 |concurrent stores to a target slower than the quantum |Four harts store while each store's bus delay reaches the quantum; all four make progress and the simulation does not abort |Positive
+|16 |NMI wake |`inject_nmi` |Positive
+|17 |ctrl access widths, fast-mem edge, and batch step branches |Widths / edges |Mixed
 |===
 
 ====== Platform firmware tests
