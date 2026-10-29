@@ -2,7 +2,7 @@
 
 - Version: 2.1
 - Release date: 15-Aug-2026
-- Notes updated: 07-Sep-2026
+- Notes updated: 28-Oct-2026
 - Release name: release_2.1
 
 # Release Details
@@ -24,7 +24,7 @@ Platforms: `smc-vp`, `sep-vp`, `smu-vp`.
 
 - Interconnect: `smc_fabric` (local/global decode, remap, filters, inbound ports)
 - Interrupt and timers: PLIC, CLINT, OCTS system timer, per-core WDT, per-core BEU
-- Reset and CPU control: reset unit, `cpu_ctrl`
+- Reset and CPU control: reset unit, `cpu_ctrl` (per-core reset hold and pulse, `core_resets_done`)
 - Peripherals: UART (×4), I2C (×3), I3C (×6), DMA, memory zeroer, AVSBus, telemetry receiver (×3), PLL wrapper, PVT wrapper
 - Integration: AoU core; DFT CSR and DFD APB windows are RAZ/WI stubs so MMIO decode does not hang
 
@@ -35,6 +35,34 @@ Platforms: `smc-vp`, `sep-vp`, `smu-vp`.
 - Crypto and entropy: Adams Bridge (ML-DSA-87 / ML-KEM-1024), HMAC, KMAC, OTBN, CSRNG, AES, Key Manager, EDN, Entropy Source
 - Peripherals: secure DMA, mailbox, AON timer, eFuse/OTP, lifecycle controller, SPI controller (OpenTitan), SPI Flash (SFDP Profile 1)
 - Integration: SEP↔SMU AXI boundary (`smn_inbound_axi`, `smn_outbound_axi`, `sep_ext_to_smc_axi`), with the inbound-window CSRs exported so the SMU crossbar sizes its SEP aperture from them; OTP key-request stub, mailbox host stub, MailboxBridge, `dma_sys_bus_adapter`, stdout / virt-console / SEP status report
+
+## Changes since release 2.1
+
+- **SMC ISA**: `smc-vp` and `smu-vp` preset `dut.cluster.isa` to
+  `rv64imafdcsu_zba_zbb_zbs`, the cores' S- and U-mode and Zba/Zbb/Zbs. Firmware
+  built for the SMC, including its boot ROM, no longer traps on a bit-manipulation
+  instruction or on the trap delegation registers `mideleg` and `medeleg`.
+- **`CFLUSH.D.L1`**: Rocket's custom data-cache flush (`0xFC000073`, any `rs1`)
+  retires without effect in M-mode, at any 2-byte boundary; the model has no data
+  cache. It trapped as illegal. Outside M-mode it still traps, as on Rocket.
+- **Concurrent SMC stores**: harts storing to a target slower than the quantum no
+  longer abort the simulation with `Resource deadlock avoided`.
+- **SMC core reset** (`cpu_ctrl`, RTL `smc_cpu_ctrl_wrap`):
+  - `RESET_CTRL.coreN_reset_n` holds a core in reset, and releasing it restarts the
+    core at `RESET_VECTOR[N]`; it used to pause and resume the core.
+  - `coreN_reset_pulse_start` pulses one core, timed by `CORE_RESET_PULSE_COUNT`
+    and the new `clk_smc_period_ns` parameter.
+  - `core_resets_done` reports the pulse.
+  - The pulse bits are not stored.
+  - These 64-bit registers take 32-bit accesses at either half.
+- **ROM-only SMC boot**: `none` as the SMC ELF starts the SMC cores at the boot ROM
+  base and runs the image `dut.bootrom.init_file` loads, on `smc-vp` and `smu-vp`.
+- **SMC lifecycle**: on `smu-vp` the SMC's `CHIP_CONFIG.LC_STATE` follows the SEP
+  eFuse lifecycle, as the RTL wires it; it read 0. Standalone `smc-vp` reads the
+  reset value `0x0F`.
+- **Default eFuse image**: `default_efuse.preload` places its fields at the RTL word
+  offsets, after `LOCKS_SPARE`. The SEP now boots `sep-vp` and `smu-vp` in TEST_DEV;
+  before, `LC_STATE` read 0 and the lifecycle was invalid.
 
 ## Testing Status
 

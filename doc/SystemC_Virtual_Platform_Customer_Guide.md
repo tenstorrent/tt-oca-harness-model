@@ -230,6 +230,27 @@ In this repository, prefer `vp/configure_vp.sh` then `make sep-vp` / `make smc-v
 `cmake --build … --target smu-vp`). Common CMake options include build type (Debug, Release) and
 `-DSMC_CXX_STANDARD=20` when configuring the SMC/SMU tree.
 
+### Running a ROM-only SMC on `smu-vp`
+
+To run the SMC from a boot ROM image alone, pass `none` as the SMC ELF and name the
+image in the SMC ini:
+
+```ini
+[string]
+dut.bootrom.init_file : /abs/path/to/smc_rom.bin
+```
+
+```bash
+vp/build_smc/bin/smu-vp smc.ini none vp/platform/smu/config/sep_smu_config.ini sep.elf 50
+```
+
+The SMC cores then start at the boot ROM base `0xC004_0000`. `smu-vp` changes to
+the SEP ini's directory, so give the image path absolutely. The SEP drives its
+eFuse lifecycle to the SMC's `CHIP_CONFIG.LC_STATE`, so a ROM that checks the
+lifecycle sees the SEP's. `smc-vp` takes `none` the same way:
+`smc-vp <ini> none [sim_time_ms]`. `sw/smu-vp-tests/smu-rom-boot-test` and
+`sw/smc-vp-tests/smc-rom-boot-test` are worked examples.
+
 ### Key Files in This Repository (Accellera)
 
 | File / Directory   | Purpose                                                  |
