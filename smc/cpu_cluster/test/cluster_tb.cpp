@@ -127,6 +127,7 @@ public:
     bool         last_locked    = false;
     unsigned     write_calls    = 0;
     unsigned     writer_mask    = 0;   // bit per AXI ID that wrote
+    bool         reject_misaligned = false;   // as the boot ROM does
     sc_core::sc_time added_delay = sc_core::SC_ZERO_TIME;
     std::map<uint64_t, uint8_t> mem;
 
@@ -170,6 +171,10 @@ public:
         const uint64_t addr = trans.get_address();
         const unsigned len  = trans.get_data_length();
         uint8_t* ptr = trans.get_data_ptr();
+        if (reject_misaligned && (addr % len) != 0) {
+            trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+            return;
+        }
         if (trans.get_command() == tlm::TLM_WRITE_COMMAND) {
             ++write_calls;
             for (unsigned i = 0; i < len; ++i) mem[addr + i] = ptr[i];
@@ -962,6 +967,24 @@ struct cluster_tb_top : sc_core::sc_module
             h.step();
             EXPECT_EQ(h.get_pc(), RESET_PC + 0x0C);
             EXPECT_EQ(h.last_commit().opcode, smc_test::OP_ADDI_X1_X0_5);
+
+            // At a 2-byte boundary, on a target that rejects unaligned reads.
+            constexpr uint64_t ROM_PC = 0x80000800ULL;
+            constexpr uint16_t OP_C_NOP = 0x0001u;
+            bus_mmio.seed(ROM_PC, OP_C_NOP, 2);
+            bus_mmio.seed(ROM_PC + 2, OP_CFLUSH_D_L1_X0, 4);
+            bus_mmio.seed(ROM_PC + 6, smc_test::OP_J_SELF, 4);
+            bus_mmio.reject_misaligned = true;
+            h.set_reset_pc(ROM_PC);
+            h.reset();
+            h.step();
+            h.step();
+            bus_mmio.reject_misaligned = false;
+            EXPECT_FALSE(h.last_commit().trapped);
+            EXPECT_EQ(h.last_commit().opcode, OP_CFLUSH_D_L1_X0);
+            EXPECT_EQ(h.get_pc(), ROM_PC + 6);
+            h.set_reset_pc(RESET_PC);
+            h.reset();
             pass("CFLUSH.D.L1 retires without a trap");
         }
 

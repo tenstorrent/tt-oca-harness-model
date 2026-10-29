@@ -98,17 +98,27 @@ void iss_backend_whisper::reset()
 
 // Rocket's custom CFLUSH.D.L1 rs1: SYSTEM opcode, funct12 0xFC0, funct3 0,
 // rd 0, any rs1. It writes back and invalidates the L1 data cache (all of it
-// for rs1 = x0). Rocket accepts it only in M-mode, the only mode the
-// configured ISA strings give these harts.
+// for rs1 = x0). Rocket accepts it only in M-mode; elsewhere it reaches
+// Whisper, which traps it as illegal.
 constexpr uint32_t kCflushMask  = 0xFFF07FFFu;
 constexpr uint32_t kCflushMatch = 0xFC000073u;
 
 bool iss_backend_whisper::retire_cflush()
 {
-    const uint64_t pc   = hart_->peekPc();
-    uint32_t       inst = 0;
-    if (!hart_->peekMemory(pc, inst, /*usePma*/ false) ||
-        (inst & kCflushMask) != kCflushMatch) {
+    if (hart_->privilegeMode() != WdRiscv::PrivilegeMode::Machine) {
+        return false;
+    }
+    // Read the instruction as 16-bit parcels: with C it may sit at a 2-byte
+    // boundary, and targets such as the boot ROM reject an unaligned word read.
+    const uint64_t pc = hart_->peekPc();
+    uint16_t       lo = 0;
+    uint16_t       hi = 0;
+    if (!hart_->peekMemory(pc, lo, /*usePma*/ false) || (lo & 0x3u) != 0x3u ||
+        !hart_->peekMemory(pc + 2, hi, /*usePma*/ false)) {
+        return false;
+    }
+    const uint32_t inst = lo | (uint32_t(hi) << 16);
+    if ((inst & kCflushMask) != kCflushMatch) {
         return false;
     }
     // The model has no data cache, so there is nothing to write back.

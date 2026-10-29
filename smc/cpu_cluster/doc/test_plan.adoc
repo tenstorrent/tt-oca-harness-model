@@ -41,7 +41,7 @@ Source: `test/cluster_tb.cpp`. Names are the `[PASS]` titles.
 |4 |memory routing (fast-mem + MMIO) |Socket carve-out |Positive
 |5 |smc_axi_extension on MMIO transactions |Sideband on `mmio` |Positive
 |6 |step() and WFI flag |ISS step / WFI park |Positive
-|7 |CFLUSH.D.L1 retires without a trap |`cflush.d.l1 x0` and `a0` advance the PC without a trap |Positive
+|7 |CFLUSH.D.L1 retires without a trap |`cflush.d.l1 x0` and `a0` advance the PC without a trap, also at a 2-byte boundary on a target that rejects unaligned reads |Positive
 |8 |IRQ aggregator and WFI wake |MSIP/MTIP/MEIP → MIP |Positive
 |9 |CPU configures PLIC, handles MEIP |CPU→PLIC→CPU |Positive
 |10 |scratchpad SRAM INIT_MEM_DONE handshake |Peer hook |Positive

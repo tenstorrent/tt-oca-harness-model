@@ -123,7 +123,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `smc-wdt-test/` | SiFive TLWDT stage-1 KEY/CMP/IP/FEED + stage-2 WDT_TIMEOUT / RESET |
 | `smc-hang-irq-test/` | Fabric AXI hang CSRs + PLIC source 287 (`irq_test` path) |
 | `smc-zb-isa-test/` | Zba, Zbb and Zbs instructions execute with the expected results (built for `rv64imac_zba_zbb_zbs`) |
-| `smc-cflush-test/` | Rocket's `CFLUSH.D.L1` with `rs1 = x0` and `rs1 = a0` retires without a trap |
+| `smc-cflush-test/` | The cores have S- and U-mode; Rocket's `CFLUSH.D.L1` with `rs1 = x0` and `rs1 = a0` retires without a trap in M-mode and traps as illegal in U-mode |
 | `smc-rom-boot-test/` | ROM-only boot: `smc-vp` gets `none` as the ELF and runs `rom.S` from the boot ROM base (own generated `.ini`) |
 
 ### Shared Support Code (`common/`)
