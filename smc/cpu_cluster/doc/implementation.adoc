@@ -105,7 +105,7 @@ Sizing knobs are immutable. Quantum and AMO detect are mutable.
 |`mem_size` |4 GiB |Whisper address space
 |`fast_mem_lo` / `fast_mem_hi` |0 / `0x80000000` |Internal buffer window
 |`mmio_lo` / `mmio_hi` |`0x80000000` / `0x90000000` |MMIO carve-out (`smc-vp` presets `0xC0000000`..`0xC1000000`)
-|`isa` |`rv64imafdc` |Whisper ISA string (`smc-vp` and `smu-vp` preset `rv64imafdc_zba_zbb_zbs`, the cores' Zba, Zbb and Zbs)
+|`isa` |`rv64imafdc` |Whisper ISA string (`smc-vp` and `smu-vp` preset `rv64imafdcsu_zba_zbb_zbs`, the cores' S- and U-mode and Zba, Zbb and Zbs)
 |`quantum_ns` |1000 |TLM quantum
 |`quantum_insts` |1000 |Instructions per `step(K)`
 |`amo_lock_detect` |true |Best-effort `prot[3]` on AMO / LR-SC

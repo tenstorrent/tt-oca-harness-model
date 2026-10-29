@@ -480,7 +480,7 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
 | Spec requirement                                                       | Status |
 |------------------------------------------------------------------------|--------|
 | `SC_MODULE(smc_cpu_cluster)` shape from `doc/implementation.adoc` | ✅      |
-| 1..4 harts, `rv64imafdc` (platforms preset Zba/Zbb/Zbs), reset-PC configurable | ✅      |
+| 1..4 harts, `rv64imafdc` (platforms preset S/U and Zba/Zbb/Zbs), reset-PC configurable | ✅      |
 | Per-core reset hold, pulse and `core_resets_done` as the RTL           | ✅      |
 | Rocket `CFLUSH.D.L1` retires without effect (no data cache)            | ✅      |
 | Three initiator sockets (data / mmio / ifetch) §3.3 / §3.6             | ✅      |
