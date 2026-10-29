@@ -49,8 +49,9 @@ Source: `test/cluster_tb.cpp`. Names are the `[PASS]` titles.
 |12 |CPU-Control negative paths and CSR edge cases |Bad access |Negative
 |13 |batch step and data-path TLM error handling |Error on `data` |Negative
 |14 |RESET_CTRL per-core reset pulse, hold and release |A pulse restarts one hart at its `RESET_VECTOR` while the others run; `core_resets_done` falls and rises; pulse bits are not stored and done bits ignore writes; 32-bit halves reach the 64-bit registers; a level 0 holds a hart through a pulse and release restarts it; a start in the held phase restarts its count |Positive
-|15 |NMI wake |`inject_nmi` |Positive
-|16 |ctrl access widths, fast-mem edge, and batch step branches |Widths / edges |Mixed
+|15 |concurrent stores to a target slower than the quantum |Four harts store while each store's bus delay reaches the quantum; all four make progress and the simulation does not abort |Positive
+|16 |NMI wake |`inject_nmi` |Positive
+|17 |ctrl access widths, fast-mem edge, and batch step branches |Widths / edges |Mixed
 |===
 
 ====== Platform firmware tests

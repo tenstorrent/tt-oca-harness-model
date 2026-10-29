@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <sstream>
 #include <stdexcept>
@@ -125,6 +126,8 @@ public:
     uint8_t      last_prot      = 0;
     bool         last_locked    = false;
     unsigned     write_calls    = 0;
+    unsigned     writer_mask    = 0;   // bit per AXI ID that wrote
+    sc_core::sc_time added_delay = sc_core::SC_ZERO_TIME;
     std::map<uint64_t, uint8_t> mem;
 
     SC_HAS_PROCESS(InspectingRamStub);
@@ -151,9 +154,13 @@ public:
         return v;
     }
 
-    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time&)
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay)
     {
+        delay += added_delay;
         if (auto* ext = trans.get_extension<smc::smc_axi_extension>()) {
+            if (trans.get_command() == tlm::TLM_WRITE_COMMAND) {
+                writer_mask |= 1u << ext->axi_id;
+            }
             saw_extension  = true;
             last_source_id = ext->source_id;
             last_axi_id    = ext->axi_id;
@@ -844,6 +851,9 @@ struct cluster_tb_top : sc_core::sc_module
         // --- smc_axi_extension (hart 0) ---------------------------------------
         {
             constexpr uint64_t MMIO = 0x80000000ULL;
+            // A debug access carries the AXI ID of the hart that ran last, so
+            // let hart 0, the only one released, run a few quanta first.
+            wait(sc_core::sc_time(5, sc_core::SC_US));
             auto& h = cluster.hart(0);
             h.reset();
             smc_test::smc_master m(h);
@@ -1266,6 +1276,42 @@ struct cluster_tb_top : sc_core::sc_module
             EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_CORE0, DONE_CORE0);
 
             pass("RESET_CTRL per-core reset pulse, hold and release");
+        }
+
+        // --- concurrent stores to a target slower than the quantum -----------
+        // Each store's delay reaches the quantum inside Whisper's store, which
+        // holds a mutex every hart shares; the harts must not yield there.
+        {
+            constexpr uint64_t STORE_PC    = 0x300;
+            constexpr uint64_t RESET_CTRL  = 0x020;
+            constexpr uint32_t program[] = {
+                0x00100113u, // addi x2, x0, 1
+                0x01F11113u, // slli x2, x2, 31        (MMIO base 0x80000000)
+                0x10013023u, // sd   x0, 0x100(x2)
+                0xFFDFF06Fu, // j    .-4
+            };
+            for (unsigned k = 0; k < std::size(program); ++k) {
+                ASSERT_TRUE(cluster.hart(0).mem_write(STORE_PC + 4 * k, 4, program[k]));
+            }
+            ctrl.write32(RESET_CTRL, 0x100u);
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                ctrl.write64(8 * i, STORE_PC);
+            }
+            bus_mmio.writer_mask = 0;
+            bus_mmio.added_delay = tlm::tlm_global_quantum::instance().get();
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_EQ(bus_mmio.writer_mask, (1u << NHARTS) - 1);
+
+            ctrl.write32(RESET_CTRL, 0x100u);
+            bus_mmio.added_delay = sc_core::SC_ZERO_TIME;
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                ctrl.write64(8 * i, RESET_PC);
+            }
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+
+            pass("concurrent stores to a target slower than the quantum");
         }
 
         // --- NMI wake (coverage) -------------------------------------------------
