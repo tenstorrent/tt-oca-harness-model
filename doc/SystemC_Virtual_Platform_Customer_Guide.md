@@ -196,7 +196,7 @@ without any commercial tooling.
 | C++ compiler     | C++20 (GCC 11+ or Apple Clang). C++20 is required for `smc-vp` / `smu-vp`; SEP-only Accellera builds may still use C++17 if SystemC was built that way |
 | Boost            | ≥ 1.74 (`iostreams`, `program_options`)      |
 | OpenSSL          | 3.x (SEP crypto models)                      |
-| Tested host OS   | Ubuntu 22.04 LTS, Red Hat Enterprise Linux 8.10, and macOS (Apple Clang) |
+| Tested host OS   | Ubuntu 24.04 LTS, Red Hat Enterprise Linux 8.10, and macOS (Apple Clang) |
 
 ### Environment Setup
 

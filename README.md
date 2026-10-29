@@ -94,7 +94,7 @@ cd build && make sep-vp
 
 ## Requirements
 
-Tested hosts: **Ubuntu 22.04 LTS**, **RHEL 8.10**, and **macOS** (Apple Clang).
+Tested hosts: **Ubuntu 24.04 LTS**, **RHEL 8.10**, and **macOS** (Apple Clang).
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the compiler matrix used in the
 current release.
 

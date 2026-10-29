@@ -20,14 +20,14 @@ OBJDUMP = $(RISCV_PREFIX)objdump
 # Architecture — rv64imac. No FP needed for these bare-metal tests; the Rocket
 # cluster emulates the superset.
 #
-# The -march string cannot be hard-coded: the two toolchain generations in CI
+# The -march string cannot be hard-coded: the two toolchain generations in use
 # want opposite spellings, and common/start.S needs CSR access (mhartid/mtvec).
 #   - Toolchains implementing ISA-manual 20191213+ split Zicsr out of the "I"
 #     base, so plain "rv64imac" rejects csrr/csrw with
 #     "unrecognized opcode ... extension `zicsr' required".  The xpack
-#     riscv-none-elf GCC 13/14 used by the RHEL CI job behaves this way.
-#   - Older toolchains -- notably Ubuntu's apt "gcc-riscv64-unknown-elf" used
-#     by .github/workflows/ci.yml -- predate the multi-letter "_zicsr" -march
+#     riscv-none-elf GCC used by the RHEL CI job behaves this way.
+#   - Older toolchains -- notably Ubuntu 22.04's apt "gcc-riscv64-unknown-elf"
+#     (GCC 10) -- predate the multi-letter "_zicsr" -march
 #     syntax entirely and fail with "cc1: error: unsupported ISA subset 'z'",
 #     but accept csrr/csrw under plain "rv64imac" because Zicsr is implied.
 # Probe the toolchain instead of guessing: take the first candidate that both

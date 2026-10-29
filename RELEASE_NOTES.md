@@ -63,6 +63,8 @@ Platforms: `smc-vp`, `sep-vp`, `smu-vp`.
 - **Default eFuse image**: `default_efuse.preload` places its fields at the RTL word
   offsets, after `LOCKS_SPARE`. The SEP now boots `sep-vp` and `smu-vp` in TEST_DEV;
   before, `LC_STATE` read 0 and the lifecycle was invalid.
+- **Ubuntu CI host**: `ci.yml` runs on Ubuntu 24.04 instead of 22.04. Ubuntu 22.04's
+  `gcc-riscv64-unknown-elf` (GCC 10) cannot assemble Zba, Zbb or Zbs.
 
 ## Testing Status
 
@@ -77,7 +79,7 @@ Each orchestrator runs **three separate** builds: Release, ASan+UBSan, and cover
 
 ### Tested on
 
-- Ubuntu 22.04 LTS
+- Ubuntu 24.04 LTS
 - RHEL 8.10
 - macOS (Apple Clang; Tahoe 26.x)
 
