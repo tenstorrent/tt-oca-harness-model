@@ -54,6 +54,7 @@ UART0, SEP on the virtconsole) and neither prints FAIL.
 | `smu-traffic-test` | DV `smc_cpu_traffic_sep_axi_test` | 50 SMC→SEP write+readback beats through `output_axi` → xbar → SEP SRAM. |
 | `smu-aou-ext-test` | `fw/smc/tests/smu_sep_ext_axi` | Activate AOU, then both CPUs write/readback a catch-all address through `xbar.ext_out` → local AOU → peer → `stub_sysmem`. SEP also reads AOU `ip_version` through the dedicated SMC window (`0x4000_C000`) and programs the outbound filter before its `smn_outbound` beat. |
 | `smu-mailbox-test` | SEP mailbox → SMC PLIC | SEP pushes an inbound mailbox beat; SMC checks PLIC pending, payload `READ_DATA`, and IRQS ack. |
+| `smu-reset-pulse-test` | RTL `smc_cpu_ctrl_wrap` core reset pulse | SMC places a counter routine in SRAM (`0xC007_0000`). Through its SMC window the SEP writes `RESET_VECTOR[0]` in 32-bit halves, pulses hart 0 alone (`RESET_CTRL` `0x11F`), waits for `core_resets_done[0]`, and sees the routine's token count; it then holds hart 0 (`0x10E`) and sees the token stop, and releases it (`0x10F`) and sees it count again. |
 
 ## Address plan (smu-link-test)
 

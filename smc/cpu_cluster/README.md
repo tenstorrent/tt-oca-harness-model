@@ -457,9 +457,16 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
   next `hart(i).reset()`.
 - **WFI (§3.7)**: when a hart executes `wfi`, its `SC_THREAD` waits
   on `wfi_event_[i]`. Any rising edge on its IRQ aggregator wakes it.
-- **CORE_ENABLE (§3.8)**: bit `i` enables hart `i`. When toggled high,
-  the wrapper notifies `core_enable_event_[i]` so the corresponding
-  thread leaves its wait-for-enable barrier.
+- **Core reset (§3.8, RTL `smc_cpu_ctrl_wrap`)**: `RESET_CTRL` bit `i`
+  (`coreN_reset_n`, active low) holds hart `i` in reset while 0; on release
+  the hart restarts at `RESET_VECTOR[i]`. Writing 1 to bit `4 + i` starts a
+  reset pulse on hart `i` alone: it keeps its reset level for
+  `pre_reset_count + 1` SMC clocks, is held in reset for
+  `post_reset_count + 1` clocks (`CORE_RESET_PULSE_COUNT`, timed by
+  `clk_smc_period_ns`), then restarts. The pulse bits are not stored, and
+  `core_resets_done[35:32]` reads 0 while a hart's pulse runs. Core resets do
+  not drain: memory stays reachable while a hart is held or pulsed. The
+  64-bit reset registers take 32-bit accesses at either half.
 - **Verification hooks**: see the `hart(i).*` API and the included
   Tier-0/Tier-1 tests. Coverage instrumentation is enabled by
   `./run_tests.sh --coverage` (or `-DENABLE_COVERAGE=ON` at configure time);
@@ -473,7 +480,9 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
 | Spec requirement                                                       | Status |
 |------------------------------------------------------------------------|--------|
 | `SC_MODULE(smc_cpu_cluster)` shape from `doc/implementation.adoc` | ✅      |
-| 1..4 harts, `rv64imafdc`, reset-PC configurable                        | ✅      |
+| 1..4 harts, `rv64imafdc` (platforms preset Zba/Zbb/Zbs), reset-PC configurable | ✅      |
+| Per-core reset hold, pulse and `core_resets_done` as the RTL           | ✅      |
+| Rocket `CFLUSH.D.L1` retires without effect (no data cache)            | ✅      |
 | Three initiator sockets (data / mmio / ifetch) §3.3 / §3.6             | ✅      |
 | `ctrl` target socket with CPU-Control register file §3.8               | ✅      |
 | Per-hart IRQ inputs (msip / mtip / meip) §3.7                          | ✅      |

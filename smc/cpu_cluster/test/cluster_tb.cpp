@@ -1180,22 +1180,101 @@ struct cluster_tb_top : sc_core::sc_module
             pass("batch step and data-path TLM error handling");
         }
 
-        // --- RESET_CTRL park and NMI wake (coverage) ---------------------------
+        // --- RESET_CTRL per-core reset pulse and hold (RTL smc_cpu_ctrl_wrap) ---
         {
-            ctrl.write32(0x020, 0x1u);
-            wait(sc_core::sc_time(10, sc_core::SC_MS));
-            const uint64_t pc_running = cluster.hart(0).get_pc();
-            ctrl.write32(0x020, 0x0u);
-            wait(sc_core::sc_time(20, sc_core::SC_MS));
-            EXPECT_EQ(cluster.hart(0).get_pc(), pc_running);
+            constexpr uint32_t OP_ADDI_X1_X1_1 = 0x00108093u; // addi x1, x1, 1
+            constexpr uint32_t OP_J_BACK_4     = 0xFFDFF06Fu; // j .-4
+            constexpr uint64_t ALT_PC          = 0x200;
+            constexpr uint64_t RESET_VECTOR_0  = 0x000;
+            constexpr uint64_t RESET_CTRL      = 0x020;
+            constexpr uint64_t PULSE_COUNT     = 0x028;
+            constexpr uint64_t DONE_CORE0      = 1ULL << 32;
+            constexpr uint64_t DONE_ALL        = 0xFULL << 32;
+            constexpr uint32_t CSR_MINSTRET    = 0xB02;
+            auto& h0 = cluster.hart(0);
+            for (const uint64_t base : {RESET_PC, ALT_PC}) {
+                ASSERT_TRUE(h0.mem_write(base, 4, OP_ADDI_X1_X1_1));
+                ASSERT_TRUE(h0.mem_write(base + 4, 4, OP_J_BACK_4));
+            }
+            const auto in_loop = [](uint64_t pc, uint64_t base) {
+                return pc == base || pc == base + 4;
+            };
 
-            ctrl.write32(0x020, 0x1u);
-            wait(sc_core::sc_time(10, sc_core::SC_MS));
+            // Hold every core, then release them all: each restarts at its vector.
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                ctrl.write64(RESET_VECTOR_0 + 8 * i, RESET_PC);
+            }
+            ctrl.write32(RESET_CTRL, 0x100u);
+            wait(sc_core::sc_time(1, sc_core::SC_US));
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                EXPECT_TRUE(in_loop(cluster.hart(i).get_pc(), RESET_PC));
+            }
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_ALL, DONE_ALL);
+
+            // A pulse on core 0 restarts hart 0 alone, at the new RESET_VECTOR[0].
+            ctrl.write64(RESET_VECTOR_0, ALT_PC);
+            const uint64_t h1_instret = cluster.hart(1).read_csr(CSR_MINSTRET);
+            ctrl.write32(RESET_CTRL, 0x11Fu);
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_ALL, DONE_ALL & ~DONE_CORE0);
+            EXPECT_EQ(ctrl.read64(RESET_CTRL), 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_ALL, DONE_ALL);
+            EXPECT_TRUE(in_loop(h0.get_pc(), ALT_PC));
+            for (unsigned i = 1; i < NHARTS; ++i) {
+                EXPECT_TRUE(in_loop(cluster.hart(i).get_pc(), RESET_PC));
+            }
+            EXPECT_TRUE(cluster.hart(1).read_csr(CSR_MINSTRET) > h1_instret);
+
+            // The counts are read-write; the done bits ignore writes.
+            ctrl.write64(PULSE_COUNT, 0x0000'0000'0020'0004ULL);
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT), 0x0000'000F'0020'0004ULL);
+            ctrl.write64(PULSE_COUNT, 0x0000'000F'0010'0008ULL);
+
+            // An RV32 agent reaches these registers in 32-bit halves.
+            EXPECT_EQ(ctrl.read32(PULSE_COUNT + 4), 0xFu);
+            EXPECT_EQ(ctrl.read32(RESET_CTRL + 4), 0u);
+            ctrl.write32(RESET_VECTOR_0 + 4, 0x1u);
+            ctrl.write32(RESET_VECTOR_0, 0x200u);
+            EXPECT_EQ(ctrl.read64(RESET_VECTOR_0), 0x0000'0001'0000'0200ULL);
+            ctrl.write64(RESET_VECTOR_0, ALT_PC);
+
+            // A level 0 holds hart 0, through a pulse too; release restarts it.
+            ctrl.write32(RESET_CTRL, 0x10Eu);
+            wait(sc_core::sc_time(1, sc_core::SC_US));
+            const uint64_t held_pc      = h0.get_pc();
+            const uint64_t held_instret = h0.read_csr(CSR_MINSTRET);
+            ctrl.write32(RESET_CTRL, 0x11Eu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_EQ(h0.get_pc(), held_pc);
+            EXPECT_EQ(h0.read_csr(CSR_MINSTRET), held_instret);
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_ALL, DONE_ALL);
+            ctrl.write64(RESET_VECTOR_0, RESET_PC);
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_TRUE(in_loop(h0.get_pc(), RESET_PC));
+
+            // A start during the held phase restarts its count. At 1.25 ns per
+            // clock the defaults give 11.25 ns before the hold and 21.25 ns of it.
+            ctrl.write32(RESET_CTRL, 0x11Fu);
+            wait(sc_core::sc_time(15, sc_core::SC_NS));
+            ctrl.write32(RESET_CTRL, 0x11Fu);
+            wait(sc_core::sc_time(20, sc_core::SC_NS));
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_CORE0, 0u);
+            wait(sc_core::sc_time(25, sc_core::SC_NS));
+            EXPECT_EQ(ctrl.read64(PULSE_COUNT) & DONE_CORE0, DONE_CORE0);
+
+            pass("RESET_CTRL per-core reset pulse, hold and release");
+        }
+
+        // --- NMI wake (coverage) -------------------------------------------------
+        {
             cluster.inject_nmi(0, 0x5u);
             wait(sc_core::sc_time(2, sc_core::SC_MS));
             EXPECT_FALSE(cluster.hart(0).is_wfi());
 
-            pass("RESET_CTRL park and NMI wake");
+            pass("NMI wake");
         }
 
         // --- branch coverage: ctrl lengths, fast-mem edge, batch step ---------

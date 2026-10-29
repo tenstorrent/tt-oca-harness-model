@@ -23,6 +23,7 @@
 #include "InstId.hpp"
 #include "DecodedInst.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 
@@ -33,6 +34,15 @@ namespace {
 // their packed console words to
 // (tt-oca-harness: hw/sys/smc/bootrom/prod/lib/src/virt_console.c).
 constexpr unsigned kVConsoleScratchIdx = 2;
+
+// RESET_CTRL and CORE_RESET_PULSE_COUNT fields (cpu_ctrl.rdl).
+constexpr unsigned kMaxHarts             = 4;
+constexpr unsigned kResetPulseStartShift = 4;   // coreN_reset_pulse_start_n0_scan[7:4]
+constexpr uint64_t kResetPulseStartMask  = 0xFULL << kResetPulseStartShift;
+constexpr unsigned kPreResetCountShift   = 0;   // pre_reset_count[15:0]
+constexpr unsigned kPostResetCountShift  = 16;  // post_reset_count[31:16]
+constexpr uint64_t kPulseCountMask       = 0xFFFF'FFFFULL;
+constexpr unsigned kCoreResetsDoneShift  = 32;  // core_resets_done[35:32], read-only
 }  // namespace
 
 // ===========================================================================
@@ -82,6 +92,8 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
     , vconsole_enable_p_("vconsole_enable", cfg.vconsole_enable,
                          "Decode the SMC production ROM's virtual-console words written "
                          "to ctrl SCRATCH[2] and print them as [SMC_VCONSOLE] lines.")
+    , clk_smc_period_ns_p_("clk_smc_period_ns", cfg.clk_smc_period_ns,
+                           "SMC clock period in ns; times the reset pulse counts.")
     , qk_(num_harts_p_.get_value())
 {
     // Virtual console on ctrl SCRATCH[2]. Line-buffered: the ROM emits at most
@@ -106,8 +118,12 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
     wdt_timeout_cluster_i.init(nh);
     beu_nmi_in.init(nh);
     beu_nmi_prev_.assign(nh, false);
-    wfi_event_       .init(nh);
-    core_enable_event_.init(nh);
+    wfi_event_        .init(nh);
+    reset_event_      .init(nh);
+    reset_pulse_event_.init(nh);
+    pulse_phase_.assign(nh, pulse_phase::idle);
+    pulse_level_at_start_.assign(nh, true);
+    reset_pending_.assign(nh, false);
 
     wdt_stage2_count_.fill(regs_.wdt_timeout);
     wdt_stage2_reload_pulse_.fill(false);
@@ -212,6 +228,16 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
             [this, i]() { this->beu_nmi_method(i); },
             sc_core::sc_gen_unique_name("beu_nmi"),
             &nmi_opts);
+
+        // SC_METHOD: per-core reset pulse phase timer.
+        sc_core::sc_spawn_options pulse_opts;
+        pulse_opts.spawn_method();
+        pulse_opts.dont_initialize();
+        pulse_opts.set_sensitivity(&reset_pulse_event_[i]);
+        sc_core::sc_spawn(
+            [this, i]() { this->reset_pulse_method(i); },
+            sc_core::sc_gen_unique_name("reset_pulse"),
+            &pulse_opts);
     }
 }
 
@@ -276,7 +302,7 @@ void smc_cpu_cluster::inject_nmi(unsigned i, uint64_t cause)
 
 // ===========================================================================
 // SC_THREAD: per-hart execution loop with temporal decoupling.
-// §3.5 hart_thread + RESET_CTRL gating + step(K).
+// §3.5 hart_thread + RESET_CTRL reset + step(K).
 // ===========================================================================
 void smc_cpu_cluster::hart_thread(unsigned i)
 {
@@ -286,18 +312,23 @@ void smc_cpu_cluster::hart_thread(unsigned i)
     hart.reset();
 
     while (true) {
-        // §3.8 RESET_CTRL gate: lower reset_n bits release each hart when set.
-        if ((regs_.reset_ctrl & (1ULL << i)) == 0) {
+        // §3.8 core reset: a held hart restarts at RESET_VECTOR[i] on release.
+        // There is no drain; memory stays reachable while a hart is held.
+        if (in_reset(i)) {
+            reset_pending_[i] = true;
             qk.sync();
-            sc_core::wait(core_enable_event_[i]);
-            // After being re-enabled, fall through and re-evaluate.
+            sc_core::wait(reset_event_[i]);
             continue;
+        }
+        if (reset_pending_[i]) {
+            reset_pending_[i] = false;
+            hart.reset();
         }
 
         if (hart.is_wfi()) {
             // Park: drain local time so other initiators see it, then wait.
             qk.sync();
-            sc_core::wait(wfi_event_[i] | core_enable_event_[i]);
+            sc_core::wait(wfi_event_[i] | reset_event_[i]);
             continue;
         }
 
@@ -555,17 +586,49 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
         }
     };
 
+    // The reset registers below are 64 bits wide and take narrower accesses
+    // at any byte lane, as the RTL's byte strobes do: a read returns the
+    // addressed lanes and a write changes only them. An RV32 SEP reaches them
+    // in 32-bit halves.
+    const unsigned lane = unsigned(off & 7);
+    auto lane_read = [&](uint64_t reg) { store_u64(reg >> (8 * lane)); };
+    auto lane_merge = [&](uint64_t reg) -> uint64_t {
+        const unsigned bytes = std::min<unsigned>(len, 8 - lane);
+        const uint64_t mask  = (bytes >= 8 ? ~0ULL : ((1ULL << (8 * bytes)) - 1)) << (8 * lane);
+        return (reg & ~mask) | ((load_u64() << (8 * lane)) & mask);
+    };
+    const bool is_read = trans.get_command() == tlm::TLM_READ_COMMAND;
+
     // RESET_VECTOR[i] occupies 8 bytes each starting at 0x000 (idx 0..3).
     if (off < 0x020) {
         const unsigned idx = unsigned(off / 8);
-        if (trans.get_command() == tlm::TLM_READ_COMMAND) {
-            store_u64(regs_.reset_vector[idx]);
+        if (is_read) {
+            lane_read(regs_.reset_vector[idx]);
         } else {
-            const uint64_t v = load_u64();
+            const uint64_t v = lane_merge(regs_.reset_vector[idx]);
             regs_.reset_vector[idx] = v;
             if (idx < harts_.size()) {
                 harts_[idx]->set_reset_pc(v);   // effective on next reset
             }
+        }
+        trans.set_response_status(tlm::TLM_OK_RESPONSE);
+        return;
+    }
+    if ((off & ~uint64_t{7}) == 0x020) {  // RESET_CTRL
+        if (is_read) {
+            lane_read(regs_.reset_ctrl);
+        } else {
+            apply_reset_ctrl(lane_merge(regs_.reset_ctrl));
+        }
+        trans.set_response_status(tlm::TLM_OK_RESPONSE);
+        return;
+    }
+    if ((off & ~uint64_t{7}) == 0x028) {  // CORE_RESET_PULSE_COUNT; core_resets_done is read-only
+        if (is_read) {
+            lane_read(core_reset_pulse_count());
+        } else {
+            regs_.core_reset_pulse_count =
+                lane_merge(regs_.core_reset_pulse_count) & kPulseCountMask;
         }
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
         return;
@@ -589,15 +652,6 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
     };
 
     switch (off) {
-    case 0x020:  // RESET_CTRL
-        if (trans.get_command() == tlm::TLM_READ_COMMAND) {
-            store_u64(regs_.reset_ctrl);
-        } else {
-            apply_reset_ctrl(load_u64());
-        }
-        trans.set_response_status(tlm::TLM_OK_RESPONSE);
-        return;
-    case 0x028: handle_u64(regs_.core_reset_pulse_count, /*ro*/ false); return;
     case 0x030: handle_u64(regs_.reset_timeout,          /*ro*/ false); return;
     case 0x040: handle_u64(regs_.reference_counter,      /*ro*/ false); return;
     case 0x050: handle_u32(regs_.wdt_timeout,            /*ro*/ false); return;
@@ -698,24 +752,79 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
 }
 
 // ===========================================================================
-// RESET_CTRL write logic -- §3.8 + §3.4 enable/park bookkeeping.
+// RESET_CTRL write logic and per-core reset pulses -- RTL smc_cpu_ctrl_wrap.
 // ===========================================================================
 void smc_cpu_cluster::apply_reset_ctrl(uint64_t new_value)
 {
     const uint64_t old_value = regs_.reset_ctrl;
-    regs_.reset_ctrl         = new_value;
+    regs_.reset_ctrl         = new_value & ~kResetPulseStartMask;
 
     for (unsigned i = 0; i < num_harts_p_.get_value(); ++i) {
-        const bool was_en = (old_value & (1ULL << i)) != 0;
-        const bool is_en  = (new_value & (1ULL << i)) != 0;
-        if (!was_en && is_en) {
-            // 0 -> 1 transition: wake the parked hart_thread.
-            core_enable_event_[i].notify(sc_core::SC_ZERO_TIME);
+        if (in_reset(i)) {
+            reset_pending_[i] = true;
         }
-        // 1 -> 0 transition: hart_thread will sample the bit at the top
-        // of its loop and park itself.  No explicit kick needed.
-        (void)was_en;
+        if ((new_value >> (kResetPulseStartShift + i)) & 1ULL) {
+            // The pulse starts from the core's reset level before this write.
+            pulse_level_at_start_[i] = ((old_value >> i) & 1ULL) != 0;
+            start_reset_pulse(i);
+        }
+        reset_event_[i].notify(sc_core::SC_ZERO_TIME);
     }
+}
+
+sc_core::sc_time smc_cpu_cluster::pulse_cycles(unsigned shift) const
+{
+    const uint64_t count = (regs_.core_reset_pulse_count >> shift) & 0xFFFFULL;
+    return sc_core::sc_time(static_cast<double>(count + 1) *
+                                clk_smc_period_ns_p_.get_value(),
+                            sc_core::SC_NS);
+}
+
+void smc_cpu_cluster::start_reset_pulse(unsigned i)
+{
+    reset_pulse_event_[i].cancel();
+    if (pulse_phase_[i] == pulse_phase::post) {
+        reset_pulse_event_[i].notify(pulse_cycles(kPostResetCountShift));
+        return;
+    }
+    pulse_phase_[i] = pulse_phase::pre;
+    reset_pulse_event_[i].notify(pulse_cycles(kPreResetCountShift));
+}
+
+void smc_cpu_cluster::reset_pulse_method(unsigned i)
+{
+    if (pulse_phase_[i] == pulse_phase::pre) {
+        // A hart steps in batches, so it may never observe a short reset;
+        // latch it here so the hart restarts once the pulse ends.
+        pulse_phase_[i]   = pulse_phase::post;
+        reset_pending_[i] = true;
+        reset_pulse_event_[i].notify(pulse_cycles(kPostResetCountShift));
+    } else {
+        pulse_phase_[i] = pulse_phase::idle;
+    }
+    reset_event_[i].notify(sc_core::SC_ZERO_TIME);
+}
+
+bool smc_cpu_cluster::in_reset(unsigned i) const
+{
+    const bool level_n = ((regs_.reset_ctrl >> i) & 1ULL) != 0;
+    switch (pulse_phase_[i]) {
+    case pulse_phase::pre:  return !(level_n && pulse_level_at_start_[i]);
+    case pulse_phase::post: return true;
+    default:                return !level_n;
+    }
+}
+
+uint64_t smc_cpu_cluster::core_reset_pulse_count() const
+{
+    uint64_t done = 0;
+    for (unsigned i = 0; i < kMaxHarts; ++i) {
+        if (i >= pulse_phase_.size() || pulse_phase_[i] == pulse_phase::idle) {
+            done |= 1ULL << i;
+        }
+    }
+    return (regs_.core_reset_pulse_count & kPulseCountMask) |
+           (done << kCoreResetsDoneShift);
 }
 
 // ===========================================================================
