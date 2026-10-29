@@ -149,6 +149,8 @@ int main(void)
     printf("Named stubs at RTL bases:\n");
     expect_eq("GPIO stub", REG_READ(SMC_GPIO_INTF_BASE), SMC_STUB_MAGIC_GPIO);
     expect_eq("MISC stub", REG_READ(SMC_MISC_WRAP_BASE), SMC_STUB_MAGIC_MISC);
+    /* chip_config.LC_STATE (misc_wrap + 0x10C) holds its reset value with no SEP to drive it. */
+    expect_eq("LC_STATE reset", REG_READ(SMC_MISC_WRAP_BASE + 0x10C) & 0xFFu, 0x0Fu);
     expect_eq("EFUSE_MAP stub", REG_READ(SMC_EFUSE_MAP_BASE),
               SMC_STUB_MAGIC_EFUSE_MAP);
     expect_eq("EFUSE_CTRL stub", REG_READ(SMC_EFUSE_CTRL_BASE),

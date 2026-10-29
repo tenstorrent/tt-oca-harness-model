@@ -396,6 +396,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[16].bind(stub_periph_misc.reg_socket);
     periph_router.out[17].bind(stub_misc_wrap.reg_socket);
     stub_misc_wrap.set_reset_value(0, STUB_MAGIC_MISC);
+    stub_misc_wrap.set_reset_value(MISC_WRAP_LC_STATE_OFFSET, LC_STATE_RESET);
     periph_router.out[27].bind(stub_ndm_reset.reg_socket);
     periph_router.out[18].bind(stub_efuse_map.reg_socket);
     stub_efuse_map.set_reset_value(0, STUB_MAGIC_EFUSE_MAP);
