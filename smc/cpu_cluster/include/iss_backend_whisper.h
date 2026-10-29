@@ -82,6 +82,10 @@ public:
     uint64_t fromhost_addr() const { return fromhost_addr_; }
 
 private:
+    // Retire a CFLUSH.D.L1 at the PC without executing it; false if the
+    // instruction there is something else.
+    bool retire_cflush();
+
     // Whisper objects (owned through shared_ptr inside Whisper's System).
     WdRiscv::System<uint64_t>&                 sys_;
     std::shared_ptr<WdRiscv::Hart<uint64_t>>   hart_;

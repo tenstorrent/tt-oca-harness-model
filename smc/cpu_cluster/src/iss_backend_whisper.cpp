@@ -12,7 +12,8 @@
 // Responsibilities (one method, one mapping):
 //
 //   reset()        -> Hart::reset(false)
-//   step()         -> Hart::singleStep(*di_)  + WFI detection
+//   step()         -> Hart::singleStep(*di_)  + WFI detection; CFLUSH.D.L1
+//                     retires here without reaching Whisper
 //   set_reset_pc() -> Hart::defineResetPc()
 //   get_pc()       -> Hart::peekPc()
 //   poke_mip()     -> Hart::externalPokeCsr(MIP, v, false)
@@ -94,6 +95,31 @@ void iss_backend_whisper::reset()
 // ---------------------------------------------------------------------------
 // Execution
 // ---------------------------------------------------------------------------
+
+// Rocket's custom CFLUSH.D.L1 rs1: SYSTEM opcode, funct12 0xFC0, funct3 0,
+// rd 0, any rs1. It writes back and invalidates the L1 data cache (all of it
+// for rs1 = x0). Rocket accepts it only in M-mode, the only mode the
+// configured ISA strings give these harts.
+constexpr uint32_t kCflushMask  = 0xFFF07FFFu;
+constexpr uint32_t kCflushMatch = 0xFC000073u;
+
+bool iss_backend_whisper::retire_cflush()
+{
+    const uint64_t pc   = hart_->peekPc();
+    uint32_t       inst = 0;
+    if (!hart_->peekMemory(pc, inst, /*usePma*/ false) ||
+        (inst & kCflushMask) != kCflushMatch) {
+        return false;
+    }
+    // The model has no data cache, so there is nothing to write back.
+    hart_->pokePc(pc + 4);
+    last_commit_         = {};
+    last_commit_.pc      = pc;
+    last_commit_.opcode  = inst;
+    last_commit_.priv    = static_cast<uint8_t>(hart_->privilegeMode());
+    return true;
+}
+
 bool iss_backend_whisper::step()
 {
     if (wfi_active_) {
@@ -108,6 +134,10 @@ bool iss_backend_whisper::step()
             // Caller is expected to park us; do nothing.
             return true;
         }
+    }
+
+    if (retire_cflush()) {
+        return true;
     }
 
     hart_->singleStep(*di_);

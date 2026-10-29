@@ -925,6 +925,36 @@ struct cluster_tb_top : sc_core::sc_module
             pass("step() and WFI flag");
         }
 
+        // --- CFLUSH.D.L1 retires without effect (hart 0) ----------------------
+        {
+            auto& h = cluster.hart(0);
+            constexpr uint32_t OP_CFLUSH_D_L1_X0 = 0xFC000073u; // cflush.d.l1 x0
+            constexpr uint32_t OP_CFLUSH_D_L1_A0 = 0xFC050073u; // cflush.d.l1 a0
+            const uint32_t program[] = {
+                OP_CFLUSH_D_L1_X0, OP_CFLUSH_D_L1_A0, smc_test::OP_ADDI_X1_X0_5,
+                smc_test::OP_J_SELF,
+            };
+            for (unsigned k = 0; k < sizeof(program) / sizeof(program[0]); ++k) {
+                ASSERT_TRUE(h.mem_write(RESET_PC + 4 * k, 4, program[k]));
+            }
+            h.poke_mip(0);
+            h.set_reset_pc(RESET_PC);
+            h.reset();
+            h.step();
+            EXPECT_EQ(h.get_pc(), RESET_PC + 0x04);
+            EXPECT_FALSE(h.last_commit().trapped);
+            EXPECT_EQ(h.last_commit().opcode, OP_CFLUSH_D_L1_X0);
+            EXPECT_EQ(h.last_commit().pc, RESET_PC);
+            h.step();
+            EXPECT_EQ(h.get_pc(), RESET_PC + 0x08);
+            EXPECT_FALSE(h.last_commit().trapped);
+            EXPECT_EQ(h.last_commit().opcode, OP_CFLUSH_D_L1_A0);
+            h.step();
+            EXPECT_EQ(h.get_pc(), RESET_PC + 0x0C);
+            EXPECT_EQ(h.last_commit().opcode, smc_test::OP_ADDI_X1_X0_5);
+            pass("CFLUSH.D.L1 retires without a trap");
+        }
+
         // --- IRQ aggregator (needs sc_start) ----------------------------------
         {
             ctrl.write32(0x020, 0xFu);
