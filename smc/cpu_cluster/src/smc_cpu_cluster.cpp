@@ -317,7 +317,9 @@ void smc_cpu_cluster::hart_thread(unsigned i)
         if (in_reset(i)) {
             reset_pending_[i] = true;
             qk.sync();
-            sc_core::wait(reset_event_[i]);
+            if (in_reset(i)) {
+                sc_core::wait(reset_event_[i]);
+            }
             continue;
         }
         if (reset_pending_[i]) {
@@ -328,6 +330,9 @@ void smc_cpu_cluster::hart_thread(unsigned i)
         if (hart.is_wfi()) {
             // Park: drain local time so other initiators see it, then wait.
             qk.sync();
+            if (in_reset(i)) {
+                continue;
+            }
             sc_core::wait(wfi_event_[i] | reset_event_[i]);
             continue;
         }
