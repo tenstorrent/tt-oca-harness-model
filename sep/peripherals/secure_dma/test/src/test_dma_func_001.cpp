@@ -411,8 +411,8 @@ void testbench::test_range_regwen_write_lock() {
     passed = false;
   }
 
-  // Lock RANGE_REGWEN
-  m_test->register_write_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, 0x00000000);
+  // Lock RANGE_REGWEN with MuBi4False
+  m_test->register_write_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, 0x00000009);
   wait(10, SC_NS);
 
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, range_regwen);
@@ -433,7 +433,7 @@ void testbench::test_range_regwen_write_lock() {
     msg << "ENABLED_MEMORY_RANGE_BASE changed after lock";
     passed = false;
   } else {
-    msg << "RANGE_REGWEN write-0-to-lock verified";
+    msg << "RANGE_REGWEN lock verified";
   }
 
   report_test_result(test_name, passed, msg.str());
@@ -1095,8 +1095,8 @@ void testbench::test_reset_unlocks_range_regwen() {
   m_test->apply_reset(sc_time(100, SC_NS));
   wait(20, SC_NS);
 
-  // Lock RANGE_REGWEN
-  m_test->register_write_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, 0x00000000);
+  // Lock RANGE_REGWEN with MuBi4False
+  m_test->register_write_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, 0x00000009);
   wait(10, SC_NS);
 
   uint32_t range_regwen = 0;
@@ -1202,9 +1202,8 @@ void testbench::test_register_rw0c() {
     test_passed = false;
   }
 
-  // 2) Write anything other than MuBi4True => lock, and the register settles
-  //    on MuBi4False rather than the written value.
-  m_test->register_write_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, 0x00000000);
+  // 2) Write MuBi4False => lock.
+  m_test->register_write_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, 0x00000009);
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, after);
   if ((after & 0xF) != 0x9) {

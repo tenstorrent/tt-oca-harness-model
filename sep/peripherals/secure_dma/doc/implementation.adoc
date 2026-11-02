@@ -4,10 +4,14 @@
 [[secure-dma-implementation]]
 ===== SystemC/TLM-2.0 Implementation
 
-`secure_dma_model` is a loosely-timed TLM-2.0 model. The transfer
-engine issues blocking read-then-write pairs on the ASID-selected
-initiator socket. SHA-2 is OpenSSL. Timing uses
-`tlm_quantumkeeper` against `clk_i`.
+`secure_dma_model` is a loosely-timed TLM-2.0 model that follows the
+control state machine of `secure_dma.sv`. Each beat is a blocking
+read-then-write pair on the ASID-selected initiator socket; a zero fill
+(opcode `0x4`) issues the writes only, each checked against
+`ENABLED_MEMORY_RANGE`. Every beat is a word-aligned 4-byte transaction
+with the RTL's byte enables, and a sub-word read is steered to every
+byte lane. SHA-2 is OpenSSL. Time advances by the targets' annotated
+delays.
 
 [source,cpp]
 ----
@@ -21,29 +25,45 @@ secure_dma_model     engine, SHA-2, handshake, IRQ   (secure_dma.*)
 
 ====== Threads and sockets
 
-`transfer_engine_thread` waits on `CONTROL.go` (or a handshake
-trigger). `handshake_monitor_thread` watches `lsio_trigger[10:0]`.
-`reset_thread` clears state. `interrupt_driver_method` is the only
-writer of the three interrupt pins.
+`engine_thread` is the state machine. In `DmaIdle` it waits for
+`CONTROL.go`, or for a set busy flag between handshake chunks, and in
+handshake mode for an enabled `lsio_trigger` to be high. It then sets
+up and moves one beat at a time and returns to idle at every chunk
+boundary. An error parks it in `DmaError` until software clears
+`STATUS.error`; `CONTROL.abort` returns it to idle from any state.
+Outside a data move, a `CONTROL` or `STATUS` write takes effect inside
+the write, so a read that follows sees the new state. `reset_thread`
+clears state. `interrupt_driver_method` is the only writer of the three
+interrupt pins, which are status type: `INTR_STATE` is `STATUS.{error,
+chunk_done, done}` or'd with the last `INTR_TEST` write.
 
-`sep-vp` binds the register target at the TRM DMA aperture. OT and
-CTN initiators go to the SEP xbar; the 64-bit SYS initiator goes
-through `dma_sys_bus_adapter`. SPI TX handshake drives
-`lsio_trigger[0]`. Done / chunk-done / error go to the PIC.
+`sep-vp` binds the register target at the TRM DMA aperture. The OT
+initiator reaches the SEP xbar through `dma_alias_remap_adapter`, which
+applies the local-alias window, refuses a DMA write to ICCM or DCCM
+that does not enable all four byte lanes, and reports any error
+response as `DMA_BUS_ERR_STATUS.host_path_err` (IRQ 42). The CTN
+initiator, and the 64-bit SYS initiator through `dma_sys_bus_adapter`,
+end in dead-end stubs that answer with an error, where silicon ties the
+ports off. SPI TX handshake drives `lsio_trigger[0]`. Done / chunk-done
+/ error go to the PIC.
 
-Hardware-handshake RX does not drain on `go`. The engine waits
-for the first `lsio_trigger` so arming before a peripheral read
-does not empty an idle FIFO. Memory-to-memory still starts on
-`go`.
+A memory-to-memory chunk ends with `go` and `busy` clear and
+`STATUS.chunk_done` set; the next `go` continues the transfer, keeping
+the byte count and beat addresses. Only a start with
+`initial_transfer` takes the opcode and digest swap and restarts the
+count, and hardware clears the bit. In handshake mode `go` arms
+without setting `busy`; each chunk starts while an enabled trigger is
+high, after the `CLEAR_INTR_SRC` writes in index order, and the final
+chunk clears `go`.
 
 [cols="36%,28%,36%",options="header"]
 |===
 |Port |Type |Platform bind
 |`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, DMA window
-|`ot_initiator_socket` |TLM 32-bit initiator |SEP xbar, DMA OT leg
-|`ctn_initiator_socket` |TLM 32-bit initiator |SEP xbar, DMA CTN leg
-|`sys_initiator_socket` |TLM 64-bit initiator |`dma_sys_bus_adapter`
-|`clk_i` |`sc_in<sc_time>` |10 ns period on `sep-vp`
+|`ot_initiator_socket` |TLM 32-bit initiator |`dma_alias_remap_adapter`, then SEP xbar
+|`ctn_initiator_socket` |TLM 32-bit initiator |Dead-end stub
+|`sys_initiator_socket` |TLM 64-bit initiator |`dma_sys_bus_adapter`, then dead-end stub
+|`clk_i` |`sc_in<sc_time>` |10 ns period on `sep-vp`; not read by the model
 |`rst_ni` |`sc_in<bool>` |Platform reset
 |`lsio_trigger[11]` |`sc_in<bool>` |`[0]` from SPI; rest tied false
 |`dma_done_intr` |`sc_out<bool>` |SEP PIC
@@ -57,9 +77,7 @@ blocks OT-private ↔ SoC unless the transfer stages through the
 enabled DMA range.
 
 ----
-  TLM MMIO ──► CONTROL.go ──► transfer_engine_thread
-                                  │
-  lsio_trigger[] ──► handshake_monitor_thread
+  TLM MMIO ──► CONTROL / STATUS ──► engine_thread ◄── lsio_trigger[]
                                   │
                     ot / ctn / sys initiator ──► memory
                                   │
@@ -71,7 +89,7 @@ enabled DMA range.
 ====== CCI parameters
 
 Knobs are `regmodel::Param` and are re-read when used. Transfer rate
-comes from `clk_i`, not a cycle-count parameter.
+comes from the targets' annotated delays, not a cycle-count parameter.
 
 [cols="36%,20%,44%",options="header"]
 |===
@@ -83,7 +101,10 @@ comes from `clk_i`, not a cycle-count parameter.
 
 * No cycle-accurate bus protocol or SHA-2 datapath.
 * Single channel; no burst packing.
-* Handshake interrupt-clear writes to SoC buses have no
-  completion guarantee, as in the TRM.
+* On `sep-vp` a handshake interrupt-clear write on the CTN bus
+  (`CLEAR_INTR_BUS` bit clear) gets an error response and stops the
+  transfer, where silicon would hang on the tied-off port.
 * RACL on the system bus is not modelled as a separate port.
+* One beat is outstanding at a time, and an abort takes effect at the
+  next beat boundary rather than mid-transaction.
 * Not suitable for performance measurement.

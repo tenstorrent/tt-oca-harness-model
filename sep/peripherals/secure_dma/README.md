@@ -20,8 +20,8 @@ test/src/testbench.cpp             sc_main entry
 test/src/secure_dma_basetest.cpp   Common test infrastructure
 test/src/secure_dma_test.cpp       Test orchestration
 test/src/test_dma_func_001.cpp     }
-  ...                              } Functional test cases (12 total)
-test/src/test_dma_func_012.cpp     }
+  ...                              } Functional test cases (14 total)
+test/src/test_dma_func_014.cpp     }
 
 doc/index.adoc                     VP set entry (includes the two pages)
 doc/implementation.adoc            SystemC/TLM model
@@ -51,7 +51,7 @@ class secure_dma_model : public secure_dma_base
 | `dma_error_intr` | `sc_out<bool>` | Transfer error (PIC 11) |
 | `alert_fatal_fault` | `sc_out<bool>` | Fatal fault alert |
 | `lsio_trigger[11]` | `sc_in<bool>` | Hardware-handshake triggers |
-| `clk_i` | `sc_in<sc_time>` | Clock period |
+| `clk_i` | `sc_in<sc_time>` | Clock period; not read by the model |
 | `rst_ni` | `sc_in<bool>` | Active-low reset |
 
 ## Behaviour notes
@@ -88,17 +88,30 @@ incrementing transfer is testing the wrong thing.
 **A fixed-address FIFO endpoint needs `SRC_CONFIG = 0x2`** (wrap set, increment clear), not
 `0x0`. This is what the harness firmware uses for hardware-handshake sources.
 
-**Bus errors halt the transfer.** That includes a failure of the interrupt-clearing write
-during hardware handshake: `ERROR_CODE.bus_error` is set, `STATUS.error` is raised, `busy`
-and `CONTROL.go` are cleared. The RTL takes the same path into `DmaError`.
+**Errors hold the engine until software clears them.** A configuration error found at beat
+setup, a bus error, or a failed interrupt-clearing write puts the engine in `DmaError`:
+`ERROR_CODE` names the cause and `STATUS.error` is raised, while `busy`, `CONTROL.go` and the
+`CFG_REGWEN` lock stay set. Writing 1 to `STATUS.error` returns it to idle and clears `busy`
+and `go`; any `STATUS` write while the error is set clears `ERROR_CODE`.
+
+**A memory-to-memory chunk needs its own `go`.** At a chunk boundary the engine returns to
+idle with `go` and `busy` clear and `STATUS.chunk_done` set. Writing `go` again, without
+`initial_transfer`, moves the next chunk from where the last one stopped: the byte count and
+the beat addresses carry over, and a new `SRC_ADDR` or `DST_ADDR` is not used in increment
+mode. Only a start with `initial_transfer` takes the opcode and digest swap.
 
 **Hardware-handshake RX drain (peripheral-to-memory).** When
-`CONTROL.hardware_handshake_enable` (bit 4) is set, arming the transfer (`CONTROL.go`) does
-**not** move any data immediately. The engine waits for the first RX-watermark trigger on
-`lsio_trigger` before draining the first chunk, then drains one chunk per trigger until
-`TOTAL_DATA_SIZE` is reached. This matches hardware: the DMA is typically armed before the
-peripheral read is issued, so draining on arm would read an empty peripheral FIFO.
-Non-handshake (memory-to-memory) transfers still start immediately on `go`.
+`CONTROL.hardware_handshake_enable` (bit 4) is set, `CONTROL.go` arms the transfer without
+moving data or setting `busy`. A chunk starts whenever an enabled `lsio_trigger` is high (the
+inputs are levels), so the DMA can be armed before the peripheral read is issued. Between
+chunks `busy` stays set and clearing `go` does not stop the transfer; `CONTROL.abort` does.
+The final chunk clears `go`.
+
+**Beats are words.** Each beat is a word-aligned 4-byte transaction; the byte enables select
+the bytes it moves. On `sep-vp` a DMA write to ICCM or DCCM that does not enable all four
+lanes is refused, as the core's DMA port refuses it, and any error response on the DMA's
+host path sets `DMA_BUS_ERR_STATUS.host_path_err` and interrupt 42 until
+`DMA_BUS_ERR_CLEAR`.
 
 ## Building and Testing
 

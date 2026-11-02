@@ -117,6 +117,29 @@ testbench::~testbench() {
 // Test Result Reporting Helpers
 // ============================================================================
 
+bool testbench::restart_chunk_if_paused(uint32_t status) {
+  if ((status & 0x2B) != 0x20)
+    return false;
+  uint32_t control = 0;
+  m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control);
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET,
+                            (control & ~(1u << 8)) | (1u << 31));
+  return true;
+}
+
+uint32_t testbench::wait_done_restarting_chunks(int max_polls, unsigned *chunks) {
+  uint32_t status = 0;
+  for (int poll = 0; poll < max_polls; ++poll) {
+    m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
+    if (status & 0xA)
+      break;
+    if (restart_chunk_if_paused(status) && chunks)
+      ++*chunks;
+    wait(10, SC_NS);
+  }
+  return status;
+}
+
 void testbench::report_test_result(const char *test_name, bool passed) {
   m_tests_run++;
 
@@ -239,6 +262,9 @@ void testbench::run_tests() {
 
   // // Run FUNC-012 comprehensive tests
   run_func012_tests();
+
+  run_func013_tests();
+  run_func014_tests();
 
   run_coverage_tests();
 

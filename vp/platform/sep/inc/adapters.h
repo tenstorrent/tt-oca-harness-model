@@ -10,6 +10,7 @@
 #include <functional>
 #include "sep_cpu_ctrl.h"
 #include "sep_axi_extension.h"
+#include "tcm_dma_policy.h"
 
 // 64-to-32 bit bus adapter for DMA sys_initiator_socket (64-bit) → SimpleBus (32-bit).
 class dma_sys_bus_adapter : public sc_core::sc_module {
@@ -221,6 +222,11 @@ private:
  * target_base = 0x1000_0000, but a programmable region size and port-local
  * coordinates), this one is on an initiator and works in global bus addresses
  * with the fixed region constants the RTL hard-wires.
+ *
+ * It is also where the DMA's host path ends in the model: a partial-word write
+ * to the TCMs is refused as the core's DMA slave refuses it, and any error
+ * response is latched in DMA_BUS_ERR_STATUS.host_path_err, as the
+ * tlul_to_axi_lite bridge latches dma_host_intg_err_o.
  */
 class dma_alias_remap_adapter : public sc_core::sc_module {
 public:
@@ -252,11 +258,30 @@ private:
         return addr;
     }
 
+    static unsigned enabled_lanes(const tlm::tlm_generic_payload& trans) {
+        const unsigned len = trans.get_data_length();
+        const unsigned char* be = trans.get_byte_enable_ptr();
+        const unsigned be_len = trans.get_byte_enable_length();
+        unsigned lanes = 0;
+        for (unsigned i = 0; i < len && i < 8; ++i)
+            if (be == nullptr || be_len == 0 || be[i % be_len] == TLM_BYTE_ENABLED)
+                lanes |= 1u << i;
+        return lanes;
+    }
+
     void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
         const uint64_t orig = trans.get_address();
-        trans.set_address(remap(orig));
-        ini->b_transport(trans, delay);
-        trans.set_address(orig);
+        const uint64_t addr = remap(orig);
+        if (trans.is_write() &&
+            sep_tcm_dma::write_refused(addr, trans.get_data_length(), enabled_lanes(trans))) {
+            trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        } else {
+            trans.set_address(addr);
+            ini->b_transport(trans, delay);
+            trans.set_address(orig);
+        }
+        if (trans.get_response_status() != tlm::TLM_OK_RESPONSE)
+            cpu_ctrl_->report_dma_host_path_error();
     }
 
     unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {

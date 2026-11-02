@@ -522,7 +522,8 @@ public:
  *
  * DMA control register with mixed access types.
  * Fields:
- * - opcode [3:0]: Operation code (0x0=COPY, 0x1=SHA256, 0x2=SHA384, 0x3=SHA512)
+ * - opcode [3:0]: Operation code (0x0=COPY, 0x1=SHA256, 0x2=SHA384, 0x3=SHA512,
+ *   0x4=ZERO)
  * - hardware_handshake_enable [4]: Enable hardware handshake mode
  * - digest_swap [5]: Byte-swap SHA-2 digest output
  * - initial_transfer [8]: First transfer for hash initialization
@@ -561,7 +562,7 @@ public:
   using regmodel::Reg<N>::operator>>=;
   using regmodel::Reg<N>::operator<<=;
   regmodel::Bitfield<N> opcode; ///< Operation code [3:0]: 0x0=COPY, 0x1=SHA256,
-                           ///< 0x2=SHA384, 0x3=SHA512
+                           ///< 0x2=SHA384, 0x3=SHA512, 0x4=ZERO
   regmodel::Bitfield<N>
       hardware_handshake_enable; ///< Enable hardware handshake mode (bit 4, RW)
   regmodel::Bitfield<N> digest_swap;  ///< Byte-swap SHA-2 digest (bit 5, RW)

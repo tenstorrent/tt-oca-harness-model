@@ -615,6 +615,7 @@ void och_sep_ss::module_bind() {
     cpu_ctrl->nmi_vec_o(nmi_vec_signal);
     cpu_ctrl->sep_global_base_addr_o(sep_global_base_addr_signal);
     cpu_ctrl->sep_region_size_o(sep_region_size_signal);
+    cpu_ctrl->dma_host_path_err_o(dma_host_fabric_fault_signal);
     cpu_ctrl->hwif_in.smc_fuse_sense_done = true;
     cpu_ctrl->hwif_in.sep_fuse_sense_done = true;
 
@@ -970,7 +971,8 @@ void och_sep_ss::module_bind() {
     pic_inputs[ENTROPY_POOL_STALL_IRQ] = &entropy_pool_stall_signal;
     pic_inputs[ENTROPY_POOL_POINTER_FAULT_IRQ] = &entropy_pool_error_signal;
     pic_inputs[CRYPTO_ALERT_IRQ]    = &crypto_alert_signal;
-    // RTL sources 40-43 are represented in irq_map.h. Their generating
+    pic_inputs[DMA_HOST_FABRIC_FAULT_IRQ] = &dma_host_fabric_fault_signal;
+    // Sources 40, 41 and 43 are represented in irq_map.h. Their generating
     // integrity bridges are not modeled, so the default tie-low is intentional.
 
     // CSRNG

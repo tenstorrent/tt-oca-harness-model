@@ -298,7 +298,7 @@ void testbench::test_func005_asid_decode_ctn_bus() {
  *
  * Pass Criteria:
  * - ADDR_SPACE_ID register accepts write of invalid ASID values
- * - validate_asid() will detect and set ERROR_CODE.asid_error at transfer start
+ * - beat setup detects it and sets ERROR_CODE.asid_error
  *
  * Architecture Reference: FUNC-005, TC081-082 (test_error_invalid_asid_src/dst)
  * Per FUNC-005: "Invalid multibit-encoded values trigger asid_error flag"

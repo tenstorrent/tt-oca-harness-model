@@ -15,7 +15,7 @@
  * - Digest validity indication (STATUS.sha2_digest_valid)
  * - Digest register population (SHA2_DIGEST_0 through SHA2_DIGEST_15)
  * - Transfer width constraint enforcement (FOUR_BYTE requirement)
- * - Transfer abort during hashing (digest invalidation)
+ * - Transfer abort during hashing (no digest produced)
  * - OpenSSL reference digest verification
  *
  * Test Coverage: 22 test cases validating all FUNC-010 capabilities
@@ -28,10 +28,10 @@
  * - Digest comparison helpers for all three algorithms
  *
  * State Machine Integration:
- * - Hash initialization on go-bit assertion with opcode={0x1,0x2,0x3}
- * - Incremental hash updates during transfer_engine_thread() execution
- * - Hash finalization on transfer completion (m_bytes_remaining==0)
- * - Abort handling invalidates digest (sha2_digest_valid cleared)
+ * - Hash initialization on the first beat of an initial transfer with opcode={0x1,0x2,0x3}
+ * - Incremental hash updates on every beat
+ * - Hash finalization on transfer completion
+ * - An abort before completion produces no digest
  *
  * NOTE: These tests verify the OpenSSL-based SHA-2 accelerator integration.
  * Digest values must match OpenSSL EVP_Digest* reference computations.
@@ -337,14 +337,14 @@ void testbench::test_sha256_single_chunk() {
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
   wait(10, SC_NS);
 
-  // Expected sequence (when transfer_engine_thread is implemented):
-  // 1. hash_init(opcode=0x1) called on go-bit → initializes SHA-256 context
+  // Expected sequence:
+  // 1. The first beat of an initial transfer starts the SHA-256 engine
   // 2. For each 4-byte word read from source (16 iterations):
   //    - Read 4 bytes via TLM b_transport
-  //    - Call hash_update_data() with read data
+  //    - Feed the read data to the SHA-2 engine
   //    - Write 4 bytes to destination (data pass-through)
-  // 3. After m_bytes_remaining reaches 0:
-  //    - Call hash_finalize() to complete SHA-256 computation
+  // 3. After the last beat:
+  //    - Finish the SHA-256 computation
   //    - Store digest into SHA2_DIGEST_0-7 (8 registers × 4 bytes = 32 bytes)
   //    - Set STATUS.sha2_digest_valid = 1
   //    - Set STATUS.done = 1
@@ -395,8 +395,7 @@ void testbench::test_sha256_single_chunk() {
   }
 
   if (passed) {
-    msg << "SHA-256 digest computed correctly during transfer (requires "
-           "transfer_engine_thread)";
+    msg << "SHA-256 digest computed correctly during transfer";
   }
 
   report_test_result(test_name, passed, msg.str());
@@ -732,9 +731,9 @@ void testbench::test_sha256_multi_chunk() {
   wait(10, SC_NS);
 
   // Expected behavior:
-  // Chunk 1: hash_init() called, processes 64 bytes, NO hash_finalize()
-  // Chunk 2-3: hash_update_data() continues, NO hash_finalize()
-  // Chunk 4: hash_update_data() continues, hash_finalize() called
+  // Chunk 1: the SHA-2 engine starts and takes 64 bytes
+  // Chunk 2-3: the engine continues
+  // Chunk 4: the engine continues, then finishes
   // Final digest in SHA2_DIGEST_0-7, sha2_digest_valid=1
 
   // Poll STATUS.done with timeout
@@ -744,6 +743,7 @@ void testbench::test_sha256_multi_chunk() {
     wait(10, SC_NS);
     m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status_after);
     transfer_done = (status_after & 0x2) != 0; // STATUS.done bit (bit 1)
+    restart_chunk_if_paused(status_after);
   }
 
   if (!transfer_done) {
@@ -864,6 +864,7 @@ void testbench::test_sha384_multi_chunk() {
     wait(10, SC_NS);
     m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status_after);
     transfer_done = (status_after & 0x2) != 0; // STATUS.done bit (bit 1)
+    restart_chunk_if_paused(status_after);
   }
 
   if (!transfer_done) {
@@ -983,6 +984,7 @@ void testbench::test_sha512_multi_chunk() {
     wait(10, SC_NS);
     m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status_after);
     transfer_done = (status_after & 0x2) != 0; // STATUS.done bit (bit 1)
+    restart_chunk_if_paused(status_after);
   }
 
   if (!transfer_done) {
@@ -1276,7 +1278,7 @@ void testbench::test_func010_digest_swap_sha512() {
  *
  * Test Objective:
  * - Confirm initial_transfer=1 clears any previous hash accumulation
- * - Verify hash_init() is called on go-bit with initial_transfer=1
+ * - Verify the SHA-2 engine restarts on a start with initial_transfer=1
  * - Verify subsequent transfer with initial_transfer=1 produces independent
  * hash
  * - Verify previous digest is overwritten
@@ -1734,17 +1736,16 @@ void testbench::test_func010_error_hash_width_mismatch() {
 }
 
 // =============================================================================
-// FUNC-010 TC018: Abort During Hashing Invalidates Digest
+// FUNC-010 TC018: Abort During Hashing Produces No Digest
 // =============================================================================
 
 /**
- * @brief Verify transfer abort during hashing clears sha2_digest_valid
+ * @brief Verify transfer abort during hashing produces no digest
  *
  * Test Objective:
- * - Confirm abort during active hash computation invalidates digest
- * - Verify STATUS.sha2_digest_valid cleared on abort
+ * - Confirm abort during active hash computation sets no digest
+ * - Verify STATUS.sha2_digest_valid stays clear after the abort
  * - Verify partial digest not exposed in SHA2_DIGEST registers
- * - Verify hash context properly freed on abort
  *
  * Pass Criteria:
  * - Transfer starts with hashing active
@@ -1758,7 +1759,7 @@ void testbench::test_func010_error_hash_width_mismatch() {
  */
 void testbench::test_abort_during_hashing() {
   std::string test_name =
-      "FUNC-010 TC099: Abort During Inline Hashing Invalidates Digest";
+      "FUNC-010 TC099: Abort During Inline Hashing Produces No Digest";
   REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
@@ -1894,7 +1895,7 @@ void testbench::test_func010_reset_clears_digest_valid() {
  *
  * Test Objective:
  * - Confirm digest_valid=0 initially and before transfer
- * - Confirm digest_valid=1 only after hash_finalize() completes
+ * - Confirm digest_valid=1 only after the digest is computed
  * - Confirm digest_valid=0 when new transfer with initial_transfer=1 starts
  *
  * Pass Criteria:

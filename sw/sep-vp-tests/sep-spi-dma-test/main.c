@@ -99,6 +99,7 @@ extern int printf(const char *format, ...);
 #define DMA_CTRL_HSHAKE         (1u << 4)   /* hardware_handshake_enable */
 #define DMA_STATUS_DONE         (1u << 1)
 #define DMA_STATUS_ERROR        (1u << 3)
+#define DMA_STATUS_RW1C         0x2Eu       /* done, aborted, error, chunk_done */
 
 #define DMA_ASID_OT             0x77u       /* src_asid=7, dst_asid=7 */
 #define DMA_WIDTH_4B            0x2u        /* 4-byte transfer width */
@@ -174,6 +175,9 @@ static void dma_arm(uint32_t dst, uint32_t len)
     REG_WRITE(DMA_CHUNK_DATA_SIZE, CHUNK_BYTES);
     REG_WRITE(DMA_HANDSHAKE_INTR_EN, 1u);
 
+    /* The previous transfer's STATUS.done stays set until this one leaves idle, which in
+     * handshake mode is at the first trigger, so the poll below would see it at once. */
+    REG_WRITE(DMA_STATUS, DMA_STATUS_RW1C);
     REG_WRITE(DMA_CONTROL, DMA_CTRL_GO | DMA_CTRL_INITIAL | DMA_CTRL_HSHAKE);
 }
 

@@ -15,22 +15,29 @@
 
 namespace {
 
-// The DMA packs the beat at data_ptr[0 .. length) and puts the word-lane
-// mask in the byte-enable array (lane = address[1:0]). A packed byte i is
-// lane (address[1:0] + i), not index i.
+// TLM-2.0 byte enables are indexed by data byte and repeat when shorter than
+// the data.
 void copy_lanes(uint8_t* dst, const uint8_t* src, unsigned len,
-                unsigned char* enables, unsigned enable_len, uint64_t addr)
+                const unsigned char* enables, unsigned enable_len)
 {
-  if (enables == nullptr || enable_len == 0) {
-    std::memcpy(dst, src, len);
-    return;
-  }
-  const unsigned lane0 = static_cast<unsigned>(addr & 0x3u);
-  for (unsigned i = 0; i < len; ++i) {
-    const unsigned lane = lane0 + i;
-    if (lane >= enable_len || enables[lane] == TLM_BYTE_ENABLED)
+  for (unsigned i = 0; i < len; ++i)
+    if (enables == nullptr || enable_len == 0 ||
+        enables[i % enable_len] == TLM_BYTE_ENABLED)
       dst[i] = src[i];
-  }
+}
+
+// Lane mask of a beat, bit i for data byte i.
+uint8_t lane_mask(const tlm::tlm_generic_payload& trans)
+{
+  const unsigned len = trans.get_data_length();
+  const unsigned char* enables = trans.get_byte_enable_ptr();
+  const unsigned enable_len = trans.get_byte_enable_length();
+  uint8_t mask = 0;
+  for (unsigned i = 0; i < len && i < 8; ++i)
+    if (enables == nullptr || enable_len == 0 ||
+        enables[i % enable_len] == TLM_BYTE_ENABLED)
+      mask |= static_cast<uint8_t>(1u << i);
+  return mask;
 }
 
 }
@@ -277,11 +284,29 @@ void secure_dma_test::set_lsio_trigger(unsigned int trigger_index, bool assert_v
 // TLM Memory Target Callbacks
 // ============================================================================
 
+void secure_dma_test::record_beat(const tlm::tlm_generic_payload& trans, char port)
+{
+  beat b;
+  b.port = port;
+  b.write = trans.is_write();
+  b.addr = trans.get_address();
+  b.len = trans.get_data_length();
+  b.be = lane_mask(trans);
+  for (unsigned i = 0; i < b.len && i < 4; ++i)
+    b.data |= static_cast<uint32_t>(trans.get_data_ptr()[i]) << (8 * i);
+  m_beats.push_back(b);
+}
+
 void secure_dma_test::ot_b_transport(tlm::tlm_generic_payload &trans, sc_time &delay) {
   tlm::tlm_command cmd = trans.get_command();
   sc_dt::uint64 addr = trans.get_address();
   unsigned char *ptr = trans.get_data_ptr();
   unsigned int len = trans.get_data_length();
+
+  if (cmd == tlm::TLM_READ_COMMAND)
+    ++m_ot_reads;
+  else if (cmd == tlm::TLM_WRITE_COMMAND)
+    ++m_ot_writes;
 
   // One-shot fault injection for bus-error path testing.
   if (cmd == tlm::TLM_READ_COMMAND && m_inject_ot_read_bus_error_once) {
@@ -315,15 +340,16 @@ void secure_dma_test::ot_b_transport(tlm::tlm_generic_payload &trans, sc_time &d
     ++m_sideband_errors;
   unsigned char* enables = trans.get_byte_enable_ptr();
   unsigned enable_len = trans.get_byte_enable_length();
+  record_beat(trans, 'O');
 
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated OT read memory.
-    copy_lanes(ptr, &m_ot_memory_r[offset], len, enables, enable_len, addr);
+    copy_lanes(ptr, &m_ot_memory_r[offset], len, enables, enable_len);
     REG_INFO(3, logger) << "OT memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated OT write memory.
-    copy_lanes(&m_ot_memory_w[offset], ptr, len, enables, enable_len, addr);
+    copy_lanes(&m_ot_memory_w[offset], ptr, len, enables, enable_len);
     REG_INFO(3, logger) << "OT memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }
@@ -356,15 +382,16 @@ void secure_dma_test::ctn_b_transport(tlm::tlm_generic_payload &trans, sc_time &
     ++m_sideband_errors;
   unsigned char* enables = trans.get_byte_enable_ptr();
   unsigned enable_len = trans.get_byte_enable_length();
+  record_beat(trans, 'C');
 
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated CTN read memory.
-    copy_lanes(ptr, &m_ctn_memory_r[offset], len, enables, enable_len, addr);
+    copy_lanes(ptr, &m_ctn_memory_r[offset], len, enables, enable_len);
     REG_INFO(3, logger) << "CTN memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated CTN write memory.
-    copy_lanes(&m_ctn_memory_w[offset], ptr, len, enables, enable_len, addr);
+    copy_lanes(&m_ctn_memory_w[offset], ptr, len, enables, enable_len);
     REG_INFO(3, logger) << "CTN memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }
@@ -397,15 +424,16 @@ void secure_dma_test::sys_b_transport(tlm::tlm_generic_payload &trans, sc_time &
     ++m_sideband_errors;
   unsigned char* enables = trans.get_byte_enable_ptr();
   unsigned enable_len = trans.get_byte_enable_length();
+  record_beat(trans, 'S');
 
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated SYS read memory.
-    copy_lanes(ptr, &m_sys_memory_r[offset], len, enables, enable_len, addr);
+    copy_lanes(ptr, &m_sys_memory_r[offset], len, enables, enable_len);
     REG_INFO(3, logger) << "SYS memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated SYS write memory.
-    copy_lanes(&m_sys_memory_w[offset], ptr, len, enables, enable_len, addr);
+    copy_lanes(&m_sys_memory_w[offset], ptr, len, enables, enable_len);
     REG_INFO(3, logger) << "SYS memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }
