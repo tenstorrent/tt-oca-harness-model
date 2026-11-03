@@ -522,13 +522,11 @@ bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
 
     (*sock)->b_transport(trans, delay);
 
-    // No sync for stores: Whisper holds its store mutex across this callback, so a
-    // wait() would let another hart's store relock it on the same OS thread.
-    // hart_thread syncs after step() returns.
+    // No sync here, for reads either: Whisper holds its memory mutex across
+    // a store's write and the read-back that follows it, and across the load
+    // of an LR or AMO. A wait() would let another hart's store relock it on
+    // the same OS thread. hart_thread syncs after step() returns.
     qk.set(delay);
-    if (cmd == tlm::TLM_READ_COMMAND && qk.need_sync()) {
-        qk.sync();
-    }
 
     if (cmd == tlm::TLM_READ_COMMAND) {
         data = 0;
