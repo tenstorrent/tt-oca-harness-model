@@ -88,11 +88,14 @@ Rocket's `CFLUSH.D.L1 rs1` (`0xFC000073`, any `rs1`) writes back and
 invalidates the L1 data cache: all of it for `rs1 = x0`, or the line
 holding the address in `rs1`. SMC firmware uses it before handing memory
 to another agent. The cluster has no data cache, so the Whisper backend
-retires the instruction in `step()` without effect, advancing the PC by 4,
-before Whisper would trap it as illegal. It reads the instruction as two
-16-bit parcels, since with C it may sit at a 2-byte boundary and the boot
-ROM rejects an unaligned word read. Rocket accepts it only in M-mode, so in
-S- or U-mode it reaches Whisper and traps as illegal.
+retires the instruction without effect. Whisper traps it as illegal; when
+that trap comes from M-mode, `step()` restores `mstatus`, `mepc`, `mcause`
+and `mtval` to their values before the step and advances the PC past the
+instruction. Other instructions make no extra memory access for the check.
+Rocket accepts it only in M-mode, so in S- or U-mode the trap stands.
+Whisper still counts each one as an illegal instruction, and it stops a
+hart after 16 in a row, so more than 16 back-to-back `CFLUSH.D.L1`
+instructions with nothing between them stop the hart.
 
 ====== CCI parameters
 

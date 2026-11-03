@@ -126,6 +126,7 @@ public:
     uint8_t      last_prot      = 0;
     bool         last_locked    = false;
     unsigned     write_calls    = 0;
+    unsigned     read_calls     = 0;
     unsigned     writer_mask    = 0;   // bit per AXI ID that wrote
     bool         reject_misaligned = false;   // as the boot ROM does
     sc_core::sc_time added_delay = sc_core::SC_ZERO_TIME;
@@ -179,6 +180,7 @@ public:
             ++write_calls;
             for (unsigned i = 0; i < len; ++i) mem[addr + i] = ptr[i];
         } else if (trans.get_command() == tlm::TLM_READ_COMMAND) {
+            ++read_calls;
             for (unsigned i = 0; i < len; ++i) {
                 auto it = mem.find(addr + i);
                 ptr[i] = (it != mem.end()) ? it->second : 0;
@@ -955,11 +957,19 @@ struct cluster_tb_top : sc_core::sc_module
             h.poke_mip(0);
             h.set_reset_pc(RESET_PC);
             h.reset();
+            constexpr uint32_t TRAP_CSRS[] = {0x300, 0x341, 0x342, 0x343}; // mstatus..mtval
+            uint64_t trap_state[std::size(TRAP_CSRS)];
+            for (unsigned k = 0; k < std::size(TRAP_CSRS); ++k) {
+                trap_state[k] = h.read_csr(TRAP_CSRS[k]);
+            }
             h.step();
             EXPECT_EQ(h.get_pc(), RESET_PC + 0x04);
             EXPECT_FALSE(h.last_commit().trapped);
             EXPECT_EQ(h.last_commit().opcode, OP_CFLUSH_D_L1_X0);
             EXPECT_EQ(h.last_commit().pc, RESET_PC);
+            for (unsigned k = 0; k < std::size(TRAP_CSRS); ++k) {
+                EXPECT_EQ(h.read_csr(TRAP_CSRS[k]), trap_state[k]);
+            }
             h.step();
             EXPECT_EQ(h.get_pc(), RESET_PC + 0x08);
             EXPECT_FALSE(h.last_commit().trapped);
@@ -983,6 +993,19 @@ struct cluster_tb_top : sc_core::sc_module
             EXPECT_FALSE(h.last_commit().trapped);
             EXPECT_EQ(h.last_commit().opcode, OP_CFLUSH_D_L1_X0);
             EXPECT_EQ(h.get_pc(), ROM_PC + 6);
+
+            // Other M-mode instructions fetched over the bus cost one read each.
+            constexpr uint64_t BUS_PC = 0x80000900ULL;
+            bus_mmio.seed(BUS_PC, smc_test::OP_ADDI_X1_X0_5, 4);
+            bus_mmio.seed(BUS_PC + 4, smc_test::OP_J_SELF, 4);
+            h.set_reset_pc(BUS_PC);
+            h.reset();
+            bus_mmio.read_calls = 0;
+            h.step();
+            h.step();
+            EXPECT_EQ(bus_mmio.read_calls, 2u);
+            EXPECT_EQ(h.get_pc(), BUS_PC + 4);
+
             h.set_reset_pc(RESET_PC);
             h.reset();
             pass("CFLUSH.D.L1 retires without a trap");
