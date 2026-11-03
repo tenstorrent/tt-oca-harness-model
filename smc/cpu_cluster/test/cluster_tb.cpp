@@ -1337,6 +1337,55 @@ struct cluster_tb_top : sc_core::sc_module
             pass("concurrent stores to a target slower than the quantum");
         }
 
+        // --- interrupt during a parking hart's quantum sync -------------------
+        // A slow load leaves hart 0 with local time when it reaches wfi, so it
+        // syncs before it parks; an interrupt inside that sync must wake it.
+        {
+            constexpr uint64_t WFI_PC     = 0x340;
+            constexpr uint64_t RESET_CTRL = 0x020;
+            constexpr uint32_t program[] = {
+                0x00100113u, // addi x2, x0, 1
+                0x01F11113u, // slli x2, x2, 31        (MMIO base 0x80000000)
+                0x10500073u, // wfi
+                0x20013183u, // ld   x3, 0x200(x2)
+                0x10500073u, // wfi
+                0x20013423u, // sd   x0, 0x208(x2)
+                0x0000006Fu, // j    .
+            };
+            for (unsigned k = 0; k < std::size(program); ++k) {
+                ASSERT_TRUE(cluster.hart(0).mem_write(WFI_PC + 4 * k, 4, program[k]));
+            }
+            const auto q = tlm::tlm_global_quantum::instance().get();
+            ctrl.write32(RESET_CTRL, 0x100u);
+            ctrl.write64(0, WFI_PC);
+            bus_mmio.writer_mask = 0;
+            bus_mmio.added_delay = q / 4;
+            wait(q - sc_core::sc_time_stamp() % q);
+            ctrl.write32(RESET_CTRL, 0x101u);
+            wait(q / 8);
+            EXPECT_TRUE(cluster.hart(0).is_wfi());
+
+            sig_sw[0].write(true);
+            wait(q / 8);
+            EXPECT_TRUE(cluster.hart(0).is_wfi());
+            sig_sw[0].write(false);
+            wait(sc_core::sc_time(1, sc_core::SC_NS));
+            sig_sw[0].write(true);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+            EXPECT_EQ(bus_mmio.writer_mask, 1u);
+
+            sig_sw[0].write(false);
+            ctrl.write32(RESET_CTRL, 0x100u);
+            bus_mmio.added_delay = sc_core::SC_ZERO_TIME;
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                ctrl.write64(8 * i, RESET_PC);
+            }
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+
+            pass("interrupt during a parking hart's quantum sync");
+        }
+
         // --- NMI wake (coverage) -------------------------------------------------
         {
             cluster.inject_nmi(0, 0x5u);
