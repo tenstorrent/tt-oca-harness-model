@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -130,6 +131,7 @@ public:
     unsigned     writer_mask    = 0;   // bit per AXI ID that wrote
     bool         reject_misaligned = false;   // as the boot ROM does
     sc_core::sc_time added_delay = sc_core::SC_ZERO_TIME;
+    std::function<void(uint64_t)> on_write;   // called with each write's address
     std::map<uint64_t, uint8_t> mem;
 
     SC_HAS_PROCESS(InspectingRamStub);
@@ -179,6 +181,7 @@ public:
         if (trans.get_command() == tlm::TLM_WRITE_COMMAND) {
             ++write_calls;
             for (unsigned i = 0; i < len; ++i) mem[addr + i] = ptr[i];
+            if (on_write) on_write(addr);
         } else if (trans.get_command() == tlm::TLM_READ_COMMAND) {
             ++read_calls;
             for (unsigned i = 0; i < len; ++i) {
@@ -1407,6 +1410,76 @@ struct cluster_tb_top : sc_core::sc_module
             wait(sc_core::sc_time(1, sc_core::SC_MS));
 
             pass("interrupt during a parking hart's quantum sync");
+        }
+
+        // --- core reset that changes during the hart's quantum sync -----------
+        // Hart 0 resets itself with a slow store, so it reaches the reset with
+        // local time, and the reset changes inside the sync that follows: a
+        // level hold is released, or a whole pulse runs while the hart parks.
+        {
+            constexpr uint64_t RESET_PC_A = 0x380;
+            constexpr uint64_t RESTART_PC = 0x3C0;
+            constexpr uint64_t RESET_CTRL = 0x020;
+            constexpr uint64_t TRIGGER    = 0x80000210ULL;
+            constexpr uint64_t TOKEN      = 0x80000208ULL;
+            constexpr uint32_t reset_program[] = {
+                0x00100113u, // addi x2, x0, 1
+                0x01F11113u, // slli x2, x2, 31        (MMIO base 0x80000000)
+                0x20013823u, // sd   x0, 0x210(x2)     (resets core 0)
+                0x10500073u, // wfi
+                0xFFDFF06Fu, // j    .-4
+            };
+            constexpr uint32_t restart_program[] = {
+                0x00100113u, // addi x2, x0, 1
+                0x01F11113u, // slli x2, x2, 31
+                0x20213423u, // sd   x2, 0x208(x2)
+                0x0000006Fu, // j    .
+            };
+            for (unsigned k = 0; k < std::size(reset_program); ++k) {
+                ASSERT_TRUE(cluster.hart(0).mem_write(RESET_PC_A + 4 * k, 4, reset_program[k]));
+            }
+            for (unsigned k = 0; k < std::size(restart_program); ++k) {
+                ASSERT_TRUE(cluster.hart(0).mem_write(RESTART_PC + 4 * k, 4,
+                                                      restart_program[k]));
+            }
+            const auto q = tlm::tlm_global_quantum::instance().get();
+            sc_core::sc_event triggered;
+            const auto run = [&](uint32_t reset_ctrl_on_trigger, bool release) {
+                ctrl.write32(RESET_CTRL, 0x100u);
+                ctrl.write64(0, RESET_PC_A);
+                bus_mmio.seed(TOKEN, 0, 8);
+                bus_mmio.added_delay = q / 4;
+                bus_mmio.on_write = [&, reset_ctrl_on_trigger](uint64_t addr) {
+                    if (addr == TRIGGER) {
+                        ctrl.write64(0, RESTART_PC);
+                        ctrl.write32(RESET_CTRL, reset_ctrl_on_trigger);
+                        triggered.notify();
+                    }
+                };
+                wait(q - sc_core::sc_time_stamp() % q);
+                ctrl.write32(RESET_CTRL, 0x101u);
+                wait(sc_core::sc_time(1, sc_core::SC_MS), triggered);
+                if (release) {
+                    wait(q / 8);
+                    ctrl.write32(RESET_CTRL, 0x101u);
+                }
+                wait(sc_core::sc_time(1, sc_core::SC_MS));
+                EXPECT_EQ(bus_mmio.read_le(TOKEN, 8), 0x80000000ULL);
+                EXPECT_EQ(cluster.hart(0).get_pc(), RESTART_PC + 12);
+                bus_mmio.on_write = nullptr;
+            };
+            run(0x100u, /*release*/ true);   // level hold, released by the testbench
+            run(0x111u, /*release*/ false);  // pulse on core 0
+
+            ctrl.write32(RESET_CTRL, 0x100u);
+            bus_mmio.added_delay = sc_core::SC_ZERO_TIME;
+            for (unsigned i = 0; i < NHARTS; ++i) {
+                ctrl.write64(8 * i, RESET_PC);
+            }
+            ctrl.write32(RESET_CTRL, 0x10Fu);
+            wait(sc_core::sc_time(1, sc_core::SC_MS));
+
+            pass("core reset that changes during the hart's quantum sync");
         }
 
         // --- NMI wake (coverage) -------------------------------------------------
