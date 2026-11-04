@@ -58,8 +58,9 @@ Platforms: `smc-vp`, `sep-vp`, `smu-vp`.
 - **ROM-only SMC boot**: `none` as the SMC ELF starts the SMC cores at the boot ROM
   base and runs the image `dut.bootrom.init_file` loads, on `smc-vp` and `smu-vp`.
 - **SMC lifecycle**: on `smu-vp` the SMC's `CHIP_CONFIG.LC_STATE` follows the SEP
-  eFuse lifecycle, as the RTL wires it; it read 0. Standalone `smc-vp` reads the
-  reset value `0x0F`.
+  eFuse lifecycle, as the RTL wires it. The default image is TEST_DEV (`0xF0`), and
+  the register follows later transitions; before, it read 0. Standalone `smc-vp`
+  reads the reset value `0x0F`.
 - **Default eFuse image**: `default_efuse.preload` places its fields at the RTL word
   offsets, after `LOCKS_SPARE`. The SEP now boots `sep-vp` and `smu-vp` in TEST_DEV;
   before, `LC_STATE` read 0 and the lifecycle was invalid.
