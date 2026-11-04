@@ -6,6 +6,9 @@
 // sc_main for the `smc-vp` executable.  Mirrors vp/platform/sep/main.cpp:
 //   smc-vp <cci-ini> <elf> [sim_time_ms] [--uart-live] [--uart-interactive]
 //
+// <elf> may be `none`: the cores then start at the boot ROM base and run the
+// image dut.bootrom.init_file loads.
+//
 #include "smc_platform.hpp"
 #include "tlm_quantum_policy.h"
 
@@ -319,9 +322,16 @@ int sc_main(int argc, char** argv)
     const std::string top = "dut";
 
     // ELF entry -> cluster.reset_pc (immutable; must preset before construct).
-    uint64_t entry = read_elf64_entry(elf_path);
-    if (entry == UINT64_MAX) return 1;
-    std::cout << "smc-vp: ELF '" << elf_path << "' entry=0x" << std::hex << entry << std::dec << "\n";
+    const bool rom_only = elf_path == "none";
+    uint64_t entry = smc::smc_platform::BOOTROM_BASE;
+    if (rom_only) {
+        std::cout << "smc-vp: no ELF; cores start at the boot ROM base 0x" << std::hex << entry
+                  << std::dec << "\n";
+    } else {
+        entry = read_elf64_entry(elf_path);
+        if (entry == UINT64_MAX) return 1;
+        std::cout << "smc-vp: ELF '" << elf_path << "' entry=0x" << std::hex << entry << std::dec << "\n";
+    }
 
     // Register the global CCI broker BEFORE any cci_param is constructed.
     static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
@@ -370,7 +380,7 @@ int sc_main(int argc, char** argv)
     stub_aou_remote.irq_o.bind(stub_aou_remote_irq);
 
     // Load the firmware into the cluster's Whisper ISS (fast-mem backed).
-    if (!dut.cluster.load_elf({elf_path})) {
+    if (!rom_only && !dut.cluster.load_elf({elf_path})) {
         std::cerr << "ERROR: cluster.load_elf failed for '" << elf_path << "'\n";
         return 1;
     }

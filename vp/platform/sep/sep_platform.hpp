@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <sstream>
 #include <tlm_utils/simple_target_socket.h>
@@ -173,8 +174,16 @@ public:
     /// Apply ordered 32-bit ADDR=VALUE deposits before simulation starts.
     void apply_init_writes();
 
+    /// Called with the eFuse LC_STATE code ({~lc, lc}) at start of simulation and
+    /// whenever the fuse shadow changes: the lifecycle the SEP drives out on
+    /// lc_state_o (sep.sv). Register before simulation starts.
+    void set_lc_state_listener(std::function<void(uint32_t)> cb) {
+        lc_state_listener_ = std::move(cb);
+    }
+
 private:
     BasicOptions opt;
+    std::function<void(uint32_t)> lc_state_listener_;
 
     // =========================================================================
     // Peripheral models

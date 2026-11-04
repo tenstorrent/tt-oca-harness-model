@@ -78,7 +78,7 @@ env:
 jobs:
   build-deps:
     name: Build SystemC + CCI
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Install build tools
@@ -92,7 +92,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Build SystemC ${{ env.SYSTEMC_VERSION }}
         if: steps.cache-sc.outputs.cache-hit != 'true'
@@ -120,7 +120,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Build CCI ${{ env.CCI_VERSION }}
         if: steps.cache-cci.outputs.cache-hit != 'true'
@@ -151,7 +151,7 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
   sep-vp:
     name: SEP VP firmware tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: build-deps
 
     steps:
@@ -171,13 +171,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Configure VP
         # SYSTEMC_HOME and CCI_HOME come from the workflow-level env block and
@@ -218,7 +218,7 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
   sep-unit-tests:
     name: SEP peripheral unit tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: build-deps
 
     steps:
@@ -238,13 +238,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Run all SEP peripheral tests
         env:
@@ -291,7 +291,7 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
   smc-unit-tests:
     name: SMC peripheral unit tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: build-deps
 
     steps:
@@ -310,13 +310,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Run SMC peripheral tests
         env:
@@ -342,7 +342,7 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
   smc-fabric-tests:
     name: SMC Fabric unit tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: build-deps
 
     steps:
@@ -360,13 +360,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Run SMC Fabric tests
         env:
@@ -392,7 +392,7 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
   smc-vp:
     name: SMC VP firmware tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: build-deps
 
     steps:
@@ -412,13 +412,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Cache Whisper
         id: cache-whisper
@@ -429,7 +429,7 @@ jobs:
           # revision: entries saved by the earlier recipe contain a tree with
           # only librvcore.a built.  Bump it whenever the artifact set built
           # below changes, so stale/incomplete entries are not reused.
-          key: whisper-${{ env.WHISPER_REV }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libs4
+          key: whisper-${{ env.WHISPER_REV }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libs4
 
       # A cache hit is not proof the tree is usable: actions/cache saves the
       # directory in a post-job step even when the job failed, so one bad build
@@ -521,7 +521,7 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
   smc-zephyr:
     name: Zephyr SMC VP tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [build-deps, smc-vp]
 
     steps:
@@ -544,13 +544,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Download smc-vp binary
         uses: actions/download-artifact@v4
@@ -581,7 +581,7 @@ jobs:
           # are absolute and break when the checkout path changes (repo
           # rename/port). west2 also bundled .venv. Do not reuse west1
           # (~3.6 GB, includes hal_espressif git history).
-          key: zephyr-${{ env.ZEPHYR_VERSION }}-${{ runner.os }}-west3-narrow
+          key: zephyr-${{ env.ZEPHYR_VERSION }}-ubuntu24.04-west3-narrow
 
       - name: Run Zephyr SMC VP tests
         env:
@@ -627,7 +627,7 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
   smu-unit-tests:
     name: SMU interconnect unit tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: build-deps
 
     steps:
@@ -645,13 +645,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Run SMU interconnect tests
         env:
@@ -671,7 +671,7 @@ jobs:
 # ─────────────────────────────────────────────────────────────────────────────
   smu-vp:
     name: SMU VP firmware tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: build-deps
 
     steps:
@@ -702,13 +702,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.SYSTEMC_HOME }}
-          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}
 
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Cache Whisper (PIC)
         id: cache-whisper-pic
@@ -717,7 +717,7 @@ jobs:
           path: /home/runner/whisper
           # Distinct from the smc-vp "-libs4" cache: smu-vp needs PIC objects
           # to link librvcore.a into libsmc_cluster_smu.so.
-          key: whisper-${{ env.WHISPER_REV }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libs4-pic
+          key: whisper-${{ env.WHISPER_REV }}-ubuntu24.04-cxx${{ env.CXX_STD }}-libs4-pic
 
       - name: Check Whisper artifacts
         id: whisper-libs-pic

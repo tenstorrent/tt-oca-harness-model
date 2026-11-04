@@ -12,3 +12,8 @@
 # itself, not its binary, and has silently hidden whole test directories from
 # `git status`/`git add` in the past).
 smc_*_test
+
+# ROM-only boot test: the boot ROM image and the ini generated to load it.
+smc-rom-boot-test/smc_rom_boot.elf
+smc-rom-boot-test/smc_rom_boot.bin
+smc-rom-boot-test/smc_rom_boot.ini

@@ -31,14 +31,14 @@ extern int printf(const char *format, ...);
 /* SEP_EFUSE_MAP */
 #define EFUSE_LOCKS_LO      (EFUSE_BASE + 0x000u)
 #define EFUSE_LOCKS_HI      (EFUSE_BASE + 0x004u)
-#define EFUSE_LC_STATE      (EFUSE_BASE + 0x008u)
-#define EFUSE_SBOOT_DIS     (EFUSE_BASE + 0x00Cu)
-#define EFUSE_SIP_DIS_LO    (EFUSE_BASE + 0x014u)
-#define EFUSE_SIP_DIS_HI    (EFUSE_BASE + 0x018u)
-#define EFUSE_SYS_DIS_LO    (EFUSE_BASE + 0x01Cu)
-#define EFUSE_SYS_DIS_HI    (EFUSE_BASE + 0x020u)
-#define EFUSE_CHIPLET_UID_BASE (EFUSE_BASE + 0x0C8u)  /* [8] words */
-#define EFUSE_STATUS_RPT    (EFUSE_BASE + 0x168u)
+#define EFUSE_LC_STATE      (EFUSE_BASE + 0x00Cu)
+#define EFUSE_SBOOT_DIS     (EFUSE_BASE + 0x010u)
+#define EFUSE_SIP_DIS_LO    (EFUSE_BASE + 0x018u)
+#define EFUSE_SIP_DIS_HI    (EFUSE_BASE + 0x01Cu)
+#define EFUSE_SYS_DIS_LO    (EFUSE_BASE + 0x020u)
+#define EFUSE_SYS_DIS_HI    (EFUSE_BASE + 0x024u)
+#define EFUSE_CHIPLET_UID_BASE (EFUSE_BASE + 0x0CCu)  /* [8] words */
+#define EFUSE_STATUS_RPT    (EFUSE_BASE + 0x16Cu)
 
 /* EFUSE_INTERFACE_CTRL */
 #define EFUSE_STATUS          (EFUSE_BASE + 0x400u)

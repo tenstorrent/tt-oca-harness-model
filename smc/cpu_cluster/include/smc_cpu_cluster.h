@@ -114,6 +114,9 @@ public:
 
         /// Stage-2 WDT tick period (ns).  0 disables auto-tick (use dbg_wdt_stage2_tick).
         double      wdt_stage2_tick_ns = 100.0;
+
+        /// SMC clock period (ns); times the CORE_RESET_PULSE_COUNT cycle counts.
+        double      clk_smc_period_ns = 1.25;
     };
 
     // -- TLM / signal ports --------------------------------------------------
@@ -199,6 +202,7 @@ private:
     cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> local_base_default_p_;
     cci::cci_param<double, cci::CCI_IMMUTABLE_PARAM>   wdt_stage2_tick_ns_p_;
     cci::cci_param<bool>                               vconsole_enable_p_;
+    cci::cci_param<double, cci::CCI_IMMUTABLE_PARAM>   clk_smc_period_ns_p_;
 
     // -- Processes -----------------------------------------------------------
     void hart_thread(unsigned i);       // SC_THREAD: step loop
@@ -232,9 +236,23 @@ private:
     // Observes ctrl SCRATCH[2] writes; never alters the register or timing.
     virt_console::VirtConsoleDecoder vconsole_decoder_;
 
-    // RESET_CTRL write helper. Lower bits are active-high run enables in LT
-    // because the RDL fields are active-low reset_n controls.
+    // RESET_CTRL write: the coreN_reset_n levels are stored; a 1 written to a
+    // coreN_reset_pulse_start bit starts that core's pulse and is not stored.
     void apply_reset_ctrl(uint64_t new_value);
+
+    // Per-core reset pulse, as prim_pulse_signal in smc_cpu_ctrl_wrap: the core
+    // keeps the reset level it had at the start for pre_reset_count + 1 SMC
+    // clocks, then is held in reset for post_reset_count + 1 clocks. A start
+    // during a pulse restarts the count of the current phase.
+    enum class pulse_phase : uint8_t { idle, pre, post };
+    void start_reset_pulse(unsigned i);
+    void reset_pulse_method(unsigned i);
+    sc_core::sc_time pulse_cycles(unsigned shift) const;
+
+    // Hart i is in reset: its reset_n level is 0, or a pulse holds it.
+    bool in_reset(unsigned i) const;
+    // CORE_RESET_PULSE_COUNT with core_resets_done[35:32] from the pulse state.
+    uint64_t core_reset_pulse_count() const;
 
     void apply_wdt_timeout_reset(uint32_t pulse_bits);
     /// Apply reload conditions and update first/second flags.
@@ -247,7 +265,13 @@ private:
     std::unique_ptr<WdRiscv::System<uint64_t>>        whisper_sys_;
     std::vector<std::unique_ptr<iss_backend_whisper>> harts_;
     sc_core::sc_vector<sc_core::sc_event>             wfi_event_      {"wfi_event"};
-    sc_core::sc_vector<sc_core::sc_event>             core_enable_event_{"core_enable_event"};
+    // Notified when a hart's reset state may have changed.
+    sc_core::sc_vector<sc_core::sc_event>             reset_event_{"reset_event"};
+    sc_core::sc_vector<sc_core::sc_event>             reset_pulse_event_{"reset_pulse_event"};
+    std::vector<pulse_phase>                          pulse_phase_;
+    std::vector<bool>                                 pulse_level_at_start_;
+    // Set while a hart is held; the hart thread resets the hart on release.
+    std::vector<bool>                                 reset_pending_;
     std::vector<tlm_utils::tlm_quantumkeeper>         qk_;
     std::vector<uint8_t>                              mem_buf_;
     // Rising-edge detect for beu_nmi_in (level-sensitive BEU output).

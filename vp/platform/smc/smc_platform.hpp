@@ -79,6 +79,13 @@ public:
     static constexpr unsigned NUM_TELEMETRY = 3;
     static constexpr unsigned NUM_PLIC_SRC   = 336;
     static constexpr unsigned NUM_PLIC_CTX   = 8;
+    // Boot ROM base: where the cores start when no ELF supplies an entry point.
+    static constexpr uint64_t BOOTROM_BASE  = 0xC004'0000ULL;
+    // CHIP_CONFIG.LC_STATE within the misc_wrap window (chip_config @0x100 +
+    // LC_STATE @0xC): the SEP's lifecycle {~lc, lc}, read-only to software.
+    static constexpr uint64_t MISC_WRAP_LC_STATE_OFFSET = 0x10C;
+    // LC_STATE reset value (chip_config.rdl) until a SEP drives it.
+    static constexpr uint32_t LC_STATE_RESET = 0x0F;
     static constexpr unsigned NUM_SUBSYS     = 32;
     // SEP mailbox channels feeding peripheral_interrupts_o[7:0] (sep_pkg::NUM_MAILBOXES).
     static constexpr unsigned NUM_SEP_MAILBOX = 8;

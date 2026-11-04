@@ -12,7 +12,8 @@
 // Responsibilities (one method, one mapping):
 //
 //   reset()        -> Hart::reset(false)
-//   step()         -> Hart::singleStep(*di_)  + WFI detection
+//   step()         -> Hart::singleStep(*di_)  + WFI detection; CFLUSH.D.L1
+//                     retires here without reaching Whisper
 //   set_reset_pc() -> Hart::defineResetPc()
 //   get_pc()       -> Hart::peekPc()
 //   poke_mip()     -> Hart::externalPokeCsr(MIP, v, false)
@@ -94,6 +95,45 @@ void iss_backend_whisper::reset()
 // ---------------------------------------------------------------------------
 // Execution
 // ---------------------------------------------------------------------------
+
+// Rocket's custom CFLUSH.D.L1 rs1: SYSTEM opcode, funct12 0xFC0, funct3 0,
+// rd 0, any rs1. It writes back and invalidates the L1 data cache (all of it
+// for rs1 = x0). Rocket accepts it only in M-mode; elsewhere it traps as
+// illegal, as Whisper traps it in every mode.
+constexpr uint32_t kCflushMask  = 0xFFF07FFFu;
+constexpr uint32_t kCflushMatch = 0xFC000073u;
+constexpr uint64_t kIllegalInstruction = 2;
+
+iss_backend_whisper::trap_csrs iss_backend_whisper::save_trap_csrs() const
+{
+    using WdRiscv::CsrNumber;
+    return {hart_->peekCsr(CsrNumber::MSTATUS, true), hart_->peekCsr(CsrNumber::MEPC, true),
+            hart_->peekCsr(CsrNumber::MCAUSE, true), hart_->peekCsr(CsrNumber::MTVAL, true)};
+}
+
+bool iss_backend_whisper::retire_cflush(const trap_csrs& saved)
+{
+    using WdRiscv::CsrNumber;
+    if (!hart_->lastInstructionTrapped() || hart_->lastInstructionInterrupted() ||
+        hart_->lastTrapCause() != kIllegalInstruction ||
+        (di_->inst() & kCflushMask) != kCflushMatch) {
+        return false;
+    }
+    // The model has no data cache, so there is nothing to write back: undo
+    // the trap and step over the instruction.
+    const uint64_t pc = hart_->peekCsr(CsrNumber::MEPC, true);
+    (void)hart_->pokeCsr(CsrNumber::MSTATUS, saved.mstatus);
+    (void)hart_->pokeCsr(CsrNumber::MEPC, saved.mepc);
+    (void)hart_->pokeCsr(CsrNumber::MCAUSE, saved.mcause);
+    (void)hart_->pokeCsr(CsrNumber::MTVAL, saved.mtval);
+    hart_->pokePc(pc + 4);
+    last_commit_         = {};
+    last_commit_.pc      = pc;
+    last_commit_.opcode  = di_->inst();
+    last_commit_.priv    = static_cast<uint8_t>(hart_->privilegeMode());
+    return true;
+}
+
 bool iss_backend_whisper::step()
 {
     if (wfi_active_) {
@@ -110,7 +150,13 @@ bool iss_backend_whisper::step()
         }
     }
 
+    const bool machine = hart_->privilegeMode() == WdRiscv::PrivilegeMode::Machine;
+    const trap_csrs saved = machine ? save_trap_csrs() : trap_csrs{};
+
     hart_->singleStep(*di_);
+    if (machine && retire_cflush(saved)) {
+        return true;
+    }
 
     // Populate the commit-log entry (§3.9).  lastPc() is the PC of the
     // just-retired instruction; di_->inst() returns its 32-bit encoding.

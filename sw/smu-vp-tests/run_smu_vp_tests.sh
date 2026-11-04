@@ -80,14 +80,25 @@ for t in $TESTS; do
 
     smc_elf=$(find "$t" -maxdepth 1 -type f -name 'smu_*_smc' | head -n1)
     sep_elf=$(find "$t" -maxdepth 1 -type f -name 'smu_*_sep' | head -n1)
-    if [ -z "$smc_elf" ] || [ -z "$sep_elf" ]; then
+    # A test may bring its own SMC ini (smc.ini); one with no SMC ELF boots the
+    # SMC from the boot ROM image that ini names, so smu-vp gets `none`.
+    test_smc_ini="$SMC_INI"
+    [ -f "$t/smc.ini" ] && test_smc_ini=smc.ini
+    if [ -n "$smc_elf" ]; then
+        smc_arg=$(basename "$smc_elf")
+    elif [ -f "$t/smc.ini" ]; then
+        smc_arg=none
+    else
+        smc_arg=""
+    fi
+    if [ -z "$smc_arg" ] || [ -z "$sep_elf" ]; then
         echo "RESULT: $t: FAIL (missing smu_*_smc / smu_*_sep ELF after build)"
         fail=$((fail + 1)); failed_tests="$failed_tests $t"
         continue
     fi
 
     log=$(mktemp -t smu_vp_test.XXXXXX)
-    ( cd "$t" && "$VP" "$SMC_INI" "$(basename "$smc_elf")" \
+    ( cd "$t" && "$VP" "$test_smc_ini" "$smc_arg" \
         "$SEP_INI" "$(basename "$sep_elf")" "$SIM_TIME_MS" ) >"$log" 2>&1
 
     smc_pass=$(grep -c "PASS: .*SMC side" "$log")

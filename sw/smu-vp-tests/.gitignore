@@ -9,3 +9,8 @@
 # never collides with the hyphenated smu-<name>-test/ source directory.
 smu_*_smc
 smu_*_sep
+
+# ROM-only boot test: the SMC boot ROM image and the SMC ini generated to load it.
+smu-rom-boot-test/smu_rom_boot.elf
+smu-rom-boot-test/smu_rom_boot.bin
+smu-rom-boot-test/smc.ini

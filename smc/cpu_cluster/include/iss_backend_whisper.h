@@ -82,6 +82,19 @@ public:
     uint64_t fromhost_addr() const { return fromhost_addr_; }
 
 private:
+    // M-mode trap state that retire_cflush() restores.
+    struct trap_csrs {
+        uint64_t mstatus = 0;
+        uint64_t mepc    = 0;
+        uint64_t mcause  = 0;
+        uint64_t mtval   = 0;
+    };
+    trap_csrs save_trap_csrs() const;
+
+    // After Whisper traps a CFLUSH.D.L1 from M-mode as illegal, restore
+    // `saved` and retire it; false if the last step was anything else.
+    bool retire_cflush(const trap_csrs& saved);
+
     // Whisper objects (owned through shared_ptr inside Whisper's System).
     WdRiscv::System<uint64_t>&                 sys_;
     std::shared_ptr<WdRiscv::Hart<uint64_t>>   hart_;
