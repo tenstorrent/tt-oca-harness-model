@@ -112,6 +112,9 @@ struct Memory {
     std::multimap<unsigned int, std::function<bool()>> post_write_callbacks;
     std::map<unsigned int, std::function<bool(DT, uint8_t)>> write_callbacks_with_be;
 
+    // A callback sets this to end the current b_transport with a bus error (APB SLVERR).
+    bool access_error = false;
+
     Memory(std::string memory_name_, size_t memory_size_)
         : memory_name(std::move(memory_name_)), memory_block(memory_size_) {
         std::fill(memory_block.begin(), memory_block.end(), DT{0});
@@ -170,6 +173,7 @@ struct Memory {
             trans.set_response_status(vs);
             return;
         }
+        access_error = false;
         if (trans.get_command() == tlm::TLM_READ_COMMAND) {
             read_registers(trans, false);
         } else {
@@ -178,7 +182,8 @@ struct Memory {
         // An in-window hole stays TLM_OK and reads as zero. Whether a reserved
         // offset should instead be TLM_ADDRESS_ERROR is an open RDL question
         // (INTERNAL_REVIEW_OPEN_QUESTIONS A1), not something this path decides.
-        trans.set_response_status(tlm::TLM_OK_RESPONSE);
+        trans.set_response_status(access_error ? tlm::TLM_GENERIC_ERROR_RESPONSE
+                                               : tlm::TLM_OK_RESPONSE);
     }
 
     unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {

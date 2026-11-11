@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <set>
 #include <sstream>
 #include <vector>
 #include <openssl/sha.h>
@@ -93,6 +94,7 @@ efuse_model::efuse_model(sc_module_name n, int log_verbosity)
 
 void efuse_model::raise_locked_field_access()
 {
+    memory.access_error = true;
     m_locked_field_pending = true;
     m_locked_field_raise.notify(sc_core::SC_ZERO_TIME);
 }
@@ -106,14 +108,6 @@ void efuse_model::drive_locked_field_irq()
     } else {
         locked_field_access_irq_o.write(false);
     }
-}
-
-bool efuse_model::refuse_locked_write(unsigned int word)
-{
-    if (!is_write_locked(word))
-        return false;
-    raise_locked_field_access();
-    return true;
 }
 
 // =============================================================================
@@ -164,6 +158,7 @@ void efuse_model::register_callbacks()
         TOKEN_EOP.offset);
 
     register_lock_read_callbacks();
+    register_lock_write_callbacks();
 }
 
 // =============================================================================
@@ -325,8 +320,8 @@ void efuse_model::apply_transient_rma()
 //
 // LOCKS carries a write-lock/read-lock pair per fuse field, in map order, and the
 // bits are write-1-to-set and sticky until reset. Both the shadow path and the OTP
-// path are gated by them, but they refuse differently: a shadow access returns
-// DENY_WORD with a normal bus response, while an OTP command is dropped before it
+// path are gated by them, but they refuse differently: a shadow access ends with a
+// bus error (a read also carries DENY_WORD), while an OTP command is dropped before it
 // reaches the macro and reports done-with-error plus a sticky req_error.
 //
 // Word ranges are given as the shadow map byte offsets they correspond to, divided
@@ -346,7 +341,7 @@ constexpr unsigned int k_last(unsigned int byte_off, unsigned int n_words)
 
 const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     // first        last          hi     write-lock bit
-    { k_word(sep_efuse::LC_STATE_OFFSET),            k_word(sep_efuse::LC_STATE_OFFSET),            false,  0 },
+    // LC_STATE ignores its lock pair (bits 0-1), so it has no region.
     { k_word(sep_efuse::SBOOT_DIS_OFFSET),           k_word(sep_efuse::SBOOT_DIS_OFFSET),           false,  2 },
     { k_word(sep_efuse::TRANSIENT_RMA_EN_OFFSET),    k_word(sep_efuse::TRANSIENT_RMA_EN_OFFSET),    false,  4 },
     { k_word(sep_efuse::SIP_DIS_LO_OFFSET),          k_word(sep_efuse::SIP_DIS_HI_OFFSET),          false,  6 },
@@ -421,6 +416,33 @@ bool efuse_model::is_read_locked(unsigned int word) const
                          : r->lock_bank == 2 ? m_locks_spare_val
                          : m_locks_lo_val;
     return (locks >> (r->write_bit + 1u)) & 1u;
+}
+
+void efuse_model::register_lock_write_callbacks()
+{
+    // Secure test mode write-locks these words regardless of LOCKS.
+    const std::set<unsigned int> secure_tm_words = {
+        LOCKS_LO.offset, LOCKS_HI.offset, LOCKS_SPARE.offset, LC_STATE.offset,
+        SIP_DIS_LO.offset, SIP_DIS_HI.offset, SYS_DIS_LO.offset, SYS_DIS_HI.offset};
+    std::set<unsigned int> words = secure_tm_words;
+    for (unsigned int i = 0; i < k_lock_region_count; i++)
+        for (unsigned int word = k_lock_regions[i].first_word;
+             word <= k_lock_regions[i].last_word; word++)
+            words.insert(word);
+
+    // A blocked write ends with a bus error and leaves the shadow unchanged.
+    for (unsigned int word : words) {
+        const bool tm_locked = secure_tm_words.count(word) != 0;
+        auto inner = memory.write_callbacks[word];
+        memory.register_write_callback(
+            [this, word, tm_locked, inner](uint32_t value) {
+                if (is_write_locked(word) || (tm_locked && m_secure_tm_active)) {
+                    raise_locked_field_access();
+                    return true;
+                }
+                return inner ? inner(value) : true;
+            }, word);
+    }
 }
 
 void efuse_model::register_lock_read_callbacks()
@@ -800,13 +822,6 @@ bool efuse_model::handle_write_LOCKS_SPARE(uint32_t value)
     return true;
 }
 
-// The WOSET fields below are the shadow registers software is allowed to set, so
-// they are also the only ones where a write lock has anything to prevent: the rest
-// of the map is read-only to software already, and dropping a write it could never
-// have performed would be indistinguishable. Each returns true when refused, which
-// completes the bus transaction normally -- a locked write is silently dropped in
-// hardware, not turned into a fault.
-
 /*
  * LC_STATE is the one shadow field that is not a plain woset: efuse_shadow_regs.sv
  * runs the write through a transition machine and stores the differential encoding of
@@ -834,9 +849,6 @@ bool efuse_model::handle_write_LOCKS_SPARE(uint32_t value)
  */
 bool efuse_model::handle_write_LC_STATE(uint32_t value)
 {
-    if (refuse_locked_write(LC_STATE.offset))
-        return true;
-
     const uint32_t cur     = m_lc_state_val & 0xFu;
     const bool     is_prod = (cur == LC_RAW_PROD);
     const bool     frozen  = cur == LC_RAW_PROD_END   ||
@@ -871,8 +883,6 @@ bool efuse_model::handle_write_LC_STATE(uint32_t value)
 
 bool efuse_model::handle_write_SIP_DIS_LO(uint32_t value)
 {
-    if (refuse_locked_write(SIP_DIS_LO.offset))
-        return true;
     m_sip_dis_lo_val |= value;
     SIP_DIS_LO = m_sip_dis_lo_val;
     notify_shadow_change();
@@ -881,8 +891,6 @@ bool efuse_model::handle_write_SIP_DIS_LO(uint32_t value)
 
 bool efuse_model::handle_write_SIP_DIS_HI(uint32_t value)
 {
-    if (refuse_locked_write(SIP_DIS_HI.offset))
-        return true;
     m_sip_dis_hi_val |= value;
     SIP_DIS_HI = m_sip_dis_hi_val;
     notify_shadow_change();
@@ -891,8 +899,6 @@ bool efuse_model::handle_write_SIP_DIS_HI(uint32_t value)
 
 bool efuse_model::handle_write_SYS_DIS_LO(uint32_t value)
 {
-    if (refuse_locked_write(SYS_DIS_LO.offset))
-        return true;
     m_sys_dis_lo_val |= value;
     SYS_DIS_LO = m_sys_dis_lo_val;
     notify_shadow_change();
@@ -901,8 +907,6 @@ bool efuse_model::handle_write_SYS_DIS_LO(uint32_t value)
 
 bool efuse_model::handle_write_SYS_DIS_HI(uint32_t value)
 {
-    if (refuse_locked_write(SYS_DIS_HI.offset))
-        return true;
     m_sys_dis_hi_val |= value;
     SYS_DIS_HI = m_sys_dis_hi_val;
     notify_shadow_change();
@@ -911,8 +915,6 @@ bool efuse_model::handle_write_SYS_DIS_HI(uint32_t value)
 
 bool efuse_model::handle_write_CHIPLET_PUBK_REVOKE(uint32_t value)
 {
-    if (refuse_locked_write(CHIPLET_PUBK_REVOKE.offset))
-        return true;
     m_chiplet_pubk_revoke_val |= value;
     CHIPLET_PUBK_REVOKE = m_chiplet_pubk_revoke_val;
     return true;
@@ -920,8 +922,6 @@ bool efuse_model::handle_write_CHIPLET_PUBK_REVOKE(uint32_t value)
 
 bool efuse_model::handle_write_BL1_VERSION(int idx, uint32_t value)
 {
-    if (refuse_locked_write(BL1_VERSION[idx].offset))
-        return true;
     m_bl1_version_val[idx] |= value;
     BL1_VERSION[idx] = m_bl1_version_val[idx];
     return true;
@@ -929,8 +929,6 @@ bool efuse_model::handle_write_BL1_VERSION(int idx, uint32_t value)
 
 bool efuse_model::handle_write_BL2_VERSION(int idx, uint32_t value)
 {
-    if (refuse_locked_write(BL2_VERSION[idx].offset))
-        return true;
     m_bl2_version_val[idx] |= value;
     BL2_VERSION[idx] = m_bl2_version_val[idx];
     return true;
@@ -951,19 +949,8 @@ bool efuse_model::handle_write_BL2_VERSION(int idx, uint32_t value)
 // done, and letting that write clear done would hang the poll forever.
 static constexpr uint32_t HW_STATUS_BITS = (1u << 24) | (1u << 25) | (1u << 26);
 
-/*
- * Secure test mode swallows fuse commands whole.
- *
- * efuse_guard.sv:110-114 replaces the request with an empty one and the response with
- * the default, and is explicit that this is not an error capture: no status bit is set
- * and req_error stays clear. Nothing is burned and nothing is read.
- *
- * Where the model has to differ: with the response tied off, the RTL's interface FSM
- * waits for a completion that never arrives, so it stalls until the request timeout
- * expires -- or forever, with the timeout disabled. b_transport cannot stall without
- * wedging the kernel, so the command completes immediately here, reporting done with
- * no error. The security-relevant half is exact; only the stall is missing.
- */
+// Secure test mode refuses a fuse command that passes the enable, data and address
+// checks: done with an error, nothing burned or read, and req_error stays clear.
 bool efuse_model::secure_tm_blocks_command(const char *what)
 {
     if (!m_secure_tm_active)
@@ -989,15 +976,7 @@ bool efuse_model::handle_write_EFUSE_PROGRAM_CTRL(uint32_t value)
         value |=  (1u << 25);   // program_done = 1
 
         bool error = false;
-
-        if (secure_tm_blocks_command("program")) {
-            // Dropped before the guard's error paths, so no status and no req_error.
-            EFUSE_PROGRAM_INTERFACE_RD_DATA = 0u;
-            value &= ~(1u << 26);
-            EFUSE_PROGRAM_CTRL = value;
-            update_status_register();
-            return true;
-        }
+        bool tm_refused = false;
 
         if (!enabled) {
             // program_enable gates the command; efuse_program_interface.sv answers
@@ -1010,6 +989,8 @@ bool efuse_model::handle_write_EFUSE_PROGRAM_CTRL(uint32_t value)
         } else if (bit_addr >= NUM_FUSE_BITS) {
             error = true;
             m_program_addr_error = true;
+        } else if (secure_tm_blocks_command("program")) {
+            error = tm_refused = true;
         } else if (is_write_locked(bit_addr / 32)) {
             // efuse_guard drops a locked command before it reaches the macro, so
             // nothing is burned and the interface reports the refusal.
@@ -1029,7 +1010,8 @@ bool efuse_model::handle_write_EFUSE_PROGRAM_CTRL(uint32_t value)
 
         if (error) {
             value |= (1u << 26);   // program_status = 1
-            m_req_error = true;
+            if (!tm_refused)
+                m_req_error = true;
         } else {
             value &= ~(1u << 26);
         }
@@ -1059,20 +1041,15 @@ bool efuse_model::handle_write_EFUSE_READ_CTRL(uint32_t value)
         value |=  (1u << 25);   // read_done = 1
 
         bool error = false;
-
-        if (secure_tm_blocks_command("read")) {
-            EFUSE_READ_INTERFACE_RD_DATA = 0u;
-            value &= ~(1u << 26);
-            EFUSE_READ_CTRL = value;
-            update_status_register();
-            return true;
-        }
+        bool tm_refused = false;
 
         if (!enabled) {
             error = true;
         } else if (bit_addr >= NUM_FUSE_BITS) {
             error = true;
             m_read_addr_error = true;
+        } else if (secure_tm_blocks_command("read")) {
+            error = tm_refused = true;
         } else if (is_read_locked(bit_addr / 32)) {
             // Same guard as the program side. Unlike the shadow path, the OTP read
             // returns zero rather than DENY_WORD: the refusal is reported through
@@ -1082,7 +1059,8 @@ bool efuse_model::handle_write_EFUSE_READ_CTRL(uint32_t value)
 
         if (error) {
             value |= (1u << 26);   // read_status = 1
-            m_req_error = true;
+            if (!tm_refused)
+                m_req_error = true;
         } else {
             value &= ~(1u << 26);
         }

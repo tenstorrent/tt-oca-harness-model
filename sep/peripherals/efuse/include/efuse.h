@@ -28,9 +28,9 @@ public:
      * @brief `locked_field_access_interrupt_o` — a shadow access the locks refused.
      *
      * efuse_shadow_reg_access_control.sv raises this on either offence: a read of a
-     * read-locked field, or a write to a write-locked one. Both still complete on the
-     * bus (the read returns DENY_WORD, the write is dropped), so this pin is the only
-     * notification software gets; there is no status bit to poll and nothing to clear.
+     * read-locked field, or a write to a write-locked one, secure test mode included.
+     * Both end with a bus error (the read carries DENY_WORD, the write is dropped);
+     * there is no status bit to poll and nothing to clear.
      *
      * Note the scope. The OTP program and read commands are gated separately, by
      * efuse_guard, which reports through req_error instead -- so a refused *fuse
@@ -357,6 +357,7 @@ private:
     bool is_write_locked(unsigned int word) const;
     bool is_read_locked(unsigned int word) const;
     void register_lock_read_callbacks();
+    void register_lock_write_callbacks();
 
     // Locked-field interrupt. Requested from a bus callback, driven from a process;
     // see the comment on drive_locked_field_irq's definition.
@@ -365,10 +366,6 @@ private:
     bool              m_locked_field_pending = false;
     void raise_locked_field_access();
     void drive_locked_field_irq();
-
-    /// True when a write to `word` must be refused, raising the interrupt if so.
-    /// Wraps is_write_locked() so no caller can refuse silently by accident.
-    bool refuse_locked_write(unsigned int word);
 
     /**
      * @brief The fuse array — the model's source of truth for fuse contents.
