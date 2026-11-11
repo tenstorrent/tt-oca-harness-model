@@ -45,8 +45,8 @@ legal code, so `get_lc_state()` reports INVALID rather than
 |===
 
 Shadow WOSET writes accumulate into the array. OTP program/read
-CSRs address bits. Locked shadow reads return `0xBADCAB1E` with
-a normal bus response. Token `TOKEN_EOP` hashes the staged token
+CSRs address bits. Locked shadow accesses end with a bus error;
+a read carries `0xBADCAB1E`. Token `TOKEN_EOP` hashes the staged token
 with SHA-256 and publishes `0x15` / `0x2A`.
 
 ----

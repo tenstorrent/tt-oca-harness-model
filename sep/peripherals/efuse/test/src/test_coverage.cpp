@@ -700,22 +700,22 @@ void testbench::test_lock_enforcement()
     m_test->register_write_32(sep_efuse::LOCKS_LO_OFFSET, (1u << 18));
     wait(1, SC_NS);
 
-    m_test->register_write_32(sep_efuse::BL1_VERSION_OFFSET, 0x8);
+    const bool wr_ok = m_test->register_write_32(sep_efuse::BL1_VERSION_OFFSET, 0x8);
     wait(1, SC_NS);
     m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
-    if (val == 0x5)
-        report_test_pass("write-locked: shadow write dropped, old value intact");
+    if (!wr_ok && val == 0x5)
+        report_test_pass("write-locked: shadow write refused with a bus error, old value intact");
     else
-        report_test_fail("write lock", "expected 0x5 got 0x" + std::to_string(val));
+        report_test_fail("write lock", "expected bus error and 0x5, got ok=" + std::to_string(wr_ok) + " 0x" + hex32(val));
 
-    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
-                              enable_prog | (1u << 17) | (bl1_bit + 3u));
+    bool ok = m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
+                                        enable_prog | (1u << 17) | (bl1_bit + 3u));
     wait(1, SC_NS);
     m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
-    if ((val & (1u << 25)) && (val & (1u << 26)))
-        report_test_pass("write-locked: OTP program refused with done + error");
+    if (ok && (val & (1u << 25)) && (val & (1u << 26)))
+        report_test_pass("write-locked: OTP program refused with done + error, bus write ok");
     else
-        report_test_fail("write lock OTP", "expected done + error, got 0x" + std::to_string(val));
+        report_test_fail("write lock OTP", "expected ok, done + error, got ok=" + std::to_string(ok) + " 0x" + hex32(val));
 
     m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val & (1u << 4))
@@ -733,39 +733,39 @@ void testbench::test_lock_enforcement()
     else
         report_test_fail("write lock no-burn", "expected 0x4 got 0x" + std::to_string(val));
 
-    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
-    if (val == 0x5)
+    const bool rd_ok = m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
+    if (rd_ok && val == 0x5)
         report_test_pass("write-locked: shadow still readable");
     else
-        report_test_fail("write lock read path", "expected 0x5 got 0x" + std::to_string(val));
+        report_test_fail("write lock read path", "expected ok and 0x5, got ok=" + std::to_string(rd_ok) + " 0x" + hex32(val));
 
     // Read lock as well.
     m_test->register_write_32(sep_efuse::LOCKS_LO_OFFSET, (1u << 19));
     wait(1, SC_NS);
 
-    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
-    if (val == 0xBADCAB1Eu)
-        report_test_pass("read-locked: shadow read returns 0xBADCAB1E");
+    ok = m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
+    if (!ok && val == 0xBADCAB1Eu)
+        report_test_pass("read-locked: shadow read ends with a bus error and 0xBADCAB1E");
     else
-        report_test_fail("read lock shadow", "expected 0xBADCAB1E got 0x" + std::to_string(val));
+        report_test_fail("read lock shadow", "expected bus error and 0xBADCAB1E, got ok=" + std::to_string(ok) + " 0x" + hex32(val));
 
     // One lock pair covers all eight words of the field, not just the first.
-    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET + 7 * 4, val);
-    if (val == 0xBADCAB1Eu)
+    ok = m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET + 7 * 4, val);
+    if (!ok && val == 0xBADCAB1Eu)
         report_test_pass("read-locked: last word of the field denied too");
     else
-        report_test_fail("read lock span", "expected 0xBADCAB1E got 0x" + std::to_string(val));
+        report_test_fail("read lock span", "expected bus error and 0xBADCAB1E, got ok=" + std::to_string(ok) + " 0x" + hex32(val));
 
     m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, (1u << 8));
     wait(1, SC_NS);
-    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
-                              enable_read | (1u << 16) | bl1_bit);
+    ok = m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
+                                   enable_read | (1u << 16) | bl1_bit);
     wait(1, SC_NS);
     m_test->register_read_32(sep_efuse::EFUSE_READ_CTRL_OFFSET, val);
-    if ((val & (1u << 25)) && (val & (1u << 26)))
-        report_test_pass("read-locked: OTP read refused with done + error");
+    if (ok && (val & (1u << 25)) && (val & (1u << 26)))
+        report_test_pass("read-locked: OTP read refused with done + error, bus write ok");
     else
-        report_test_fail("read lock OTP", "expected done + error, got 0x" + std::to_string(val));
+        report_test_fail("read lock OTP", "expected ok, done + error, got ok=" + std::to_string(ok) + " 0x" + hex32(val));
 
     // The OTP path reports the refusal in status and returns zero, rather than
     // returning the sentinel the shadow path uses.
@@ -776,21 +776,55 @@ void testbench::test_lock_enforcement()
         report_test_fail("read lock OTP data", "expected 0x0 got 0x" + std::to_string(val));
 
     // BL2_VERSION shares no lock bits with BL1_VERSION and is still fully accessible.
-    m_test->register_write_32(sep_efuse::BL2_VERSION_OFFSET, 0x9);
+    const bool bl2_wr_ok = m_test->register_write_32(sep_efuse::BL2_VERSION_OFFSET, 0x9);
     wait(1, SC_NS);
-    m_test->register_read_32(sep_efuse::BL2_VERSION_OFFSET, val);
-    if (val == 0x9)
+    const bool bl2_rd_ok = m_test->register_read_32(sep_efuse::BL2_VERSION_OFFSET, val);
+    if (bl2_wr_ok && bl2_rd_ok && val == 0x9)
         report_test_pass("neighbouring field unaffected by BL1_VERSION's locks");
     else
-        report_test_fail("lock isolation", "expected 0x9 got 0x" + std::to_string(val));
+        report_test_fail("lock isolation", "expected ok and 0x9, got wr_ok=" + std::to_string(bl2_wr_ok) +
+                         " rd_ok=" + std::to_string(bl2_rd_ok) + " 0x" + hex32(val));
 
     // LOCKS_LO governs other fields and is never itself lockable, so it has to stay
     // readable -- otherwise software could not tell what it had locked.
-    m_test->register_read_32(sep_efuse::LOCKS_LO_OFFSET, val);
-    if (val == ((1u << 18) | (1u << 19)))
+    ok = m_test->register_read_32(sep_efuse::LOCKS_LO_OFFSET, val);
+    if (ok && val == ((1u << 18) | (1u << 19)))
         report_test_pass("LOCKS_LO itself remains readable");
     else
-        report_test_fail("LOCKS_LO readable", "expected 0xC0000 got 0x" + std::to_string(val));
+        report_test_fail("LOCKS_LO readable", "expected ok and 0xC0000, got ok=" + std::to_string(ok) + " 0x" + hex32(val));
+
+    // A write lock refuses a write to a field with no write handler of its own.
+    uint32_t class_key = 0;
+    m_test->register_read_32(sep_efuse::CLASS_KEY_OFFSET, class_key);
+    ok = m_test->register_write_32(sep_efuse::CLASS_KEY_OFFSET, ~class_key);
+    if (ok)
+        report_test_pass("unlocked: CLASS_KEY write completes");
+    else
+        report_test_fail("unlocked CLASS_KEY write", "expected ok, got a bus error");
+    m_test->register_write_32(sep_efuse::LOCKS_LO_OFFSET, (1u << 14));
+    wait(1, SC_NS);
+    ok = m_test->register_write_32(sep_efuse::CLASS_KEY_OFFSET + 7 * 4, ~class_key);
+    wait(1, SC_NS);
+    const bool ck_rd_ok = m_test->register_read_32(sep_efuse::CLASS_KEY_OFFSET, val);
+    if (!ok && ck_rd_ok && val == class_key)
+        report_test_pass("write-locked: CLASS_KEY write ends with a bus error, value intact");
+    else
+        report_test_fail("CLASS_KEY write lock", "expected bus error and 0x" + hex32(class_key) + ", got ok=" +
+                         std::to_string(ok) + " rd_ok=" + std::to_string(ck_rd_ok) + " 0x" + hex32(val));
+
+    // LC_STATE ignores its lock pair, LOCKS_LO bits 0 and 1.
+    uint32_t lc_before = 0;
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, lc_before);
+    m_test->register_write_32(sep_efuse::LOCKS_LO_OFFSET, (1u << 0) | (1u << 1));
+    wait(1, SC_NS);
+    ok = m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, val);
+    const bool lc_wr_ok = m_test->register_write_32(sep_efuse::LC_STATE_OFFSET, 0u);
+    wait(1, SC_NS);
+    if (ok && val == lc_before && lc_wr_ok)
+        report_test_pass("LC_STATE read and write ignore LOCKS_LO bits 0-1");
+    else
+        report_test_fail("LC_STATE lock exemption", "expected ok and 0x" + hex32(lc_before) + ", got rd_ok=" +
+                         std::to_string(ok) + " 0x" + hex32(val) + " wr_ok=" + std::to_string(lc_wr_ok));
 
     m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET,
                               (1u << 8) | (1u << 9) | (1u << 10));
@@ -1490,15 +1524,19 @@ void testbench::test_preload_parser_and_lock_banks()
     bool saw_cb = false;
     m_dut->set_shadow_change_callback([&]{ saw_cb = true; });
     (void)take_locked_field_pulses();
-    m_test->register_write_32(sep_efuse::SIP_DIS_LO_OFFSET, 0x2);
-    m_test->register_write_32(sep_efuse::SIP_DIS_HI_OFFSET, 0x2);
-    m_test->register_write_32(sep_efuse::SYS_DIS_LO_OFFSET, 0x2);
-    m_test->register_write_32(sep_efuse::SYS_DIS_HI_OFFSET, 0x2);
-    m_test->register_write_32(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET, 0x2);
-    m_test->register_write_32(sep_efuse::BL2_VERSION_OFFSET, 0x2);
-    m_test->register_write_32(sep_efuse::LC_STATE_OFFSET, efuse_model::LC_RAW_PROD);
+    bool any_ok = false;
+    any_ok |= m_test->register_write_32(sep_efuse::SIP_DIS_LO_OFFSET, 0x2);
+    any_ok |= m_test->register_write_32(sep_efuse::SIP_DIS_HI_OFFSET, 0x2);
+    any_ok |= m_test->register_write_32(sep_efuse::SYS_DIS_LO_OFFSET, 0x2);
+    any_ok |= m_test->register_write_32(sep_efuse::SYS_DIS_HI_OFFSET, 0x2);
+    any_ok |= m_test->register_write_32(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET, 0x2);
+    any_ok |= m_test->register_write_32(sep_efuse::BL2_VERSION_OFFSET, 0x2);
     wait(1, SC_NS);
     m_dut->set_shadow_change_callback(nullptr);
+    if (!any_ok)
+        report_test_pass("every write-locked shadow write ends with a bus error");
+    else
+        report_test_fail("locked write response", "a write-locked shadow write completed ok");
 
     auto stayed = [&](unsigned int off, uint32_t expect, const char *what) {
         uint32_t got = 0;
@@ -1514,11 +1552,20 @@ void testbench::test_preload_parser_and_lock_banks()
     stayed(sep_efuse::SYS_DIS_HI_OFFSET, 0x1u, "SYS_DIS_HI");
     stayed(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET, 0x1u, "CHIPLET_PUBK_REVOKE");
     stayed(sep_efuse::BL2_VERSION_OFFSET, 0x1u, "BL2_VERSION");
-    stayed(sep_efuse::LC_STATE_OFFSET, 0x0u, "LC_STATE");
     if (!saw_cb)
         report_test_pass("shadow-change callback stays quiet on a refused write");
     else
         report_test_fail("refused-write callback", "callback ran for a dropped write");
+
+    // LOCKS_LO bit 0 is LC_STATE's write lock, which LC_STATE ignores.
+    const bool lc_ok = m_test->register_write_32(sep_efuse::LC_STATE_OFFSET, efuse_model::LC_RAW_PROD);
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, val);
+    if (lc_ok && val == efuse_model::lc_state_encode(efuse_model::LC_RAW_PROD))
+        report_test_pass("LC_STATE write completes despite LOCKS_LO bit 0");
+    else
+        report_test_fail("LC_STATE lock exemption", "expected ok and PROD, got ok=" + std::to_string(lc_ok) +
+                         " 0x" + hex32(val));
     if (take_locked_field_pulses() >= 1u)
         report_test_pass("locked shadow writes raise locked_field_access_irq");
     else
@@ -1544,11 +1591,11 @@ void testbench::test_preload_parser_and_lock_banks()
 
     m_test->register_write_32(sep_efuse::LOCKS_HI_OFFSET, 0x2u);
     wait(1, SC_NS);
-    m_test->register_read_32(sep_efuse::STATUS_RPT_OFFSET, val);
-    if (val == 0xBADCAB1Eu)
-        report_test_pass("LOCKS_HI read-lock returns the sentinel for STATUS_RPT");
+    const bool rpt_ok = m_test->register_read_32(sep_efuse::STATUS_RPT_OFFSET, val);
+    if (!rpt_ok && val == 0xBADCAB1Eu)
+        report_test_pass("LOCKS_HI read-lock refuses STATUS_RPT with a bus error and the sentinel");
     else
-        report_test_fail("LOCKS_HI read gate", "expected 0xBADCAB1E got 0x" + hex32(val));
+        report_test_fail("LOCKS_HI read gate", "expected bus error and 0xBADCAB1E, got ok=" + std::to_string(rpt_ok) + " 0x" + hex32(val));
 
     program(spare_bit, true);
     m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_INTERFACE_RD_DATA_OFFSET, rb);
@@ -1573,14 +1620,14 @@ void testbench::test_preload_parser_and_lock_banks()
 
     m_test->register_write_32(sep_efuse::LOCKS_SPARE_OFFSET, 0x2u);
     wait(1, SC_NS);
-    m_test->register_read_32(sep_efuse::SPARE0_OFFSET, val);
+    const bool spare0_ok = m_test->register_read_32(sep_efuse::SPARE0_OFFSET, val);
     uint32_t spare1 = 0;
-    m_test->register_read_32(sep_efuse::SPARE1_OFFSET, spare1);
-    if (val == 0xBADCAB1Eu && spare1 == 0u)
+    const bool spare1_ok = m_test->register_read_32(sep_efuse::SPARE1_OFFSET, spare1);
+    if (!spare0_ok && val == 0xBADCAB1Eu && spare1_ok && spare1 == 0u)
         report_test_pass("LOCKS_SPARE read-lock denies SPARE0 and leaves SPARE1 alone");
     else
         report_test_fail("LOCKS_SPARE read gate",
-                         "SPARE0 0x" + hex32(val) + " SPARE1 0x" + hex32(spare1));
+                         "SPARE0 ok=" + std::to_string(spare0_ok) + " 0x" + hex32(val) + " SPARE1 ok=" + std::to_string(spare1_ok) + " 0x" + hex32(spare1));
 
     const scratch_file prod_img("prod_dbg_transient");
     {

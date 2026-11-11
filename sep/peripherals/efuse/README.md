@@ -63,10 +63,11 @@ sticky error, separate from the generic request error.
 
 **Locks.** `LOCKS_LO` / `LOCKS_HI` hold a write-lock/read-lock pair per field, write-1-to-set
 and sticky until reset. Both paths are gated, and they refuse differently, as the hardware
-does: a shadow access returns `0xBADCAB1E` with a normal bus response, while an OTP command
+does: a shadow access ends with a bus error (a read carries `0xBADCAB1E`), while an OTP command
 is dropped before it reaches the macro and reports done-with-error plus a sticky
 `req_error`. A single pair covers all eight words of the multi-word keys and tokens.
 `LOCKS` itself is never lockable, so software can always see what it has locked.
+`LC_STATE` ignores its lock pair on both paths.
 
 **Token matching.** Software stages a 256-bit token in eight input words and pulses a go
 bit in `TOKEN_EOP`. The model hashes it with SHA-256 — most significant token word first,
@@ -96,18 +97,15 @@ falling through to the SiP transition, and match results are sticky, so a chiple
 left over from an earlier comparison keeps blocking until it is re-evaluated.
 
 **Locked-field interrupt.** A refused shadow access — a read of a read-locked field or a
-write to a write-locked one — pulses `locked_field_access_irq_o`. The access still
-completes on the bus, so this pin is the only notification; there is no status bit and
-nothing to clear. It covers the shadow path only. A refused *fuse command* is a different
+write to a write-locked one — ends with a bus error and pulses `locked_field_access_irq_o`;
+there is no status bit and nothing to clear. It covers the shadow path only. A refused *fuse command* is a different
 mechanism (`efuse_guard`) and reports through `req_error` instead.
 
-**Secure test mode.** With `secure_tm` set, every fuse command is dropped and the secrets
-handed to the key manager read as zero, while the shadow bus is untouched: the gate is on
-the hardware ports and the OTP interface, not on the read path. One divergence, and it is
-forced: in silicon the dropped command's response is tied off, so the interface stalls
-until its request timeout. `b_transport` cannot stall without wedging the kernel, so the
-command completes immediately with `done` and no error — RTL is explicit that a block is
-not an error capture. Nothing is burned and nothing is read either way.
+**Secure test mode.** With `secure_tm` set, a fuse command that passes the enable, data and
+address checks completes with `done` and an error status, without `req_error`; nothing is
+burned and nothing is read. The secrets handed to the key manager read as zero. On the shadow
+bus, a write to `LOCKS`, `LOCKS_SPARE`, `LC_STATE`, `SIP_DIS` or `SYS_DIS` ends with a bus
+error, as a write-locked write does; reads are untouched.
 
 ## Class
 

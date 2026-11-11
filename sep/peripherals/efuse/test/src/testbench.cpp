@@ -362,9 +362,8 @@ void testbench::test_efuse_read_ctrl_rw()
 // Secure test mode — the whole of the secure_tm run
 //
 // efuse_guard.sv empties every fuse command while the strap is asserted, and
-// efuse_shadow_regs.sv zeroes the secrets going to the key manager. Neither touches
-// the shadow bus, which is the distinction worth pinning down: software reads the
-// same values it always did, and only the hardware ports and the OTP interface change.
+// efuse_shadow_regs.sv zeroes the secrets going to the key manager. Shadow reads are
+// unchanged; shadow writes to LOCKS, LC_STATE, SIP_DIS and SYS_DIS are write-locked.
 // =============================================================================
 
 void testbench::test_secure_tm_mode()
@@ -396,17 +395,17 @@ void testbench::test_secure_tm_mode()
     else
         report_test_fail("secret zeroing", "the key manager would still receive the UID");
 
-    // A program command is dropped, not refused: RTL is explicit that this is not an
-    // error capture, so no status bit and no req_error.
+    // A secure test mode refusal completes with done and an error status, but it is not
+    // a guard error capture, so req_error stays clear.
     const uint32_t enable_prog = (1u << 27) | (1u << 16);
     m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | (1u << 18) | 700u);
     wait(1, SC_NS);
     m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
-    if ((val & (1u << 25)) && !(val & (1u << 26)))
-        report_test_pass("program command completes with done and no error");
+    if ((val & (1u << 25)) && (val & (1u << 26)))
+        report_test_pass("program command completes with done and an error status");
     else
-        report_test_fail("secure_tm program", "expected done without error, got 0x" +
+        report_test_fail("secure_tm program", "expected done with error, got 0x" +
                          std::to_string(val));
 
     m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_INTERFACE_RD_DATA_OFFSET, val);
@@ -422,10 +421,10 @@ void testbench::test_secure_tm_mode()
                               (1u << 28) | (1u << 16) | uid_bit);
     wait(1, SC_NS);
     m_test->register_read_32(sep_efuse::EFUSE_READ_CTRL_OFFSET, val);
-    if ((val & (1u << 25)) && !(val & (1u << 26)))
-        report_test_pass("read command completes with done and no error");
+    if ((val & (1u << 25)) && (val & (1u << 26)))
+        report_test_pass("read command completes with done and an error status");
     else
-        report_test_fail("secure_tm read", "expected done without error, got 0x" +
+        report_test_fail("secure_tm read", "expected done with error, got 0x" +
                          std::to_string(val));
 
     m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
@@ -436,9 +435,38 @@ void testbench::test_secure_tm_mode()
 
     m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val == 0x1)
-        report_test_pass("STATUS unchanged: a blocked command is not an error");
+        report_test_pass("STATUS unchanged: a secure test mode refusal sets no req_error");
     else
         report_test_fail("secure_tm status", "expected 0x1 got 0x" + std::to_string(val));
+
+    const struct { unsigned int offset; const char *name; } tm_locked[] = {
+        {sep_efuse::LOCKS_LO_OFFSET, "LOCKS_LO"}, {sep_efuse::LOCKS_HI_OFFSET, "LOCKS_HI"},
+        {sep_efuse::LOCKS_SPARE_OFFSET, "LOCKS_SPARE"}, {sep_efuse::LC_STATE_OFFSET, "LC_STATE"},
+        {sep_efuse::SIP_DIS_LO_OFFSET, "SIP_DIS_LO"}, {sep_efuse::SIP_DIS_HI_OFFSET, "SIP_DIS_HI"},
+        {sep_efuse::SYS_DIS_LO_OFFSET, "SYS_DIS_LO"}, {sep_efuse::SYS_DIS_HI_OFFSET, "SYS_DIS_HI"}};
+    for (const auto &f : tm_locked) {
+        uint32_t before = 0;
+        m_test->register_read_32(f.offset, before);
+        const bool wr_ok = m_test->register_write_32(f.offset, 0x1u);
+        wait(1, SC_NS);
+        const bool rd_ok = m_test->register_read_32(f.offset, val);
+        if (!wr_ok && rd_ok && val == before)
+            report_test_pass(std::string(f.name) + ": write ends with a bus error, value intact");
+        else
+            report_test_fail(std::string(f.name) + " secure_tm write",
+                             "expected bus error and 0x" + std::to_string(before) + ", got wr_ok=" +
+                             std::to_string(wr_ok) + " 0x" + std::to_string(val));
+    }
+
+    // Only those fields carry the secure-test-mode lock.
+    const bool bl1_wr_ok = m_test->register_write_32(sep_efuse::BL1_VERSION_OFFSET, 0x1u);
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
+    if (bl1_wr_ok && (val & 0x1u))
+        report_test_pass("BL1_VERSION write still completes under secure_tm");
+    else
+        report_test_fail("secure_tm BL1_VERSION write", "expected ok and bit 0 set, got wr_ok=" +
+                         std::to_string(bl1_wr_ok) + " 0x" + std::to_string(val));
 }
 
 // =============================================================================
