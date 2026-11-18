@@ -97,13 +97,11 @@ static void bl1_puthex32(uint32_t val)
 // ---------------------------------------------------------------------------
 // Fuse read-lock verification
 //
-// ROM locks CLASS_KEY, RMA_SIP_TOKEN, RMA_CHIPLET_TOKEN before BL1 handoff.
-// We verify by:
-//   1. Reading the LOCKS register and checking read-lock bits are set
-//   2. Reading the actual locked fields and verifying they return 0xBADCAB1E
-//
-// NOTE: The RTL now returns 0xBADCAB1E for locked field reads (no SLVERR).
-// This allows safe verification without triggering NMI exceptions.
+// The ROM read-locks the secret fuses before the BL1 handoff. For the class key
+// and both RMA token digests, BL1 checks that the lock bits are set and that a
+// read of each locked field completes with a bus error. On VeeR-EL2 a D-bus load
+// error is an imprecise NMI with mcause 0xF0000001 and the load address latched
+// in mdseac; the core drops the load data.
 // ---------------------------------------------------------------------------
 #define EFUSE_LOCKS_ADDR 0x10930000u
 
@@ -117,7 +115,65 @@ static void bl1_puthex32(uint32_t val)
 #define CLASS_KEY_ADDR            0x10930064u
 #define RMA_SIP_TOKEN_ADDR        0x10930024u
 #define RMA_CHIPLET_TOKEN_ADDR    0x10930044u
-#define LOCKED_FIELD_READ_VALUE   0xBADCAB1Eu
+
+#define NMI_VEC_ADDR              0x10A30180u
+#define NMI_VEC_LOCK_ADDR         0x10A30188u
+#define MCAUSE_NMI_LOAD_BUS_ERROR 0xF0000001u
+#define CSR_MDSEAC                0xFC0
+#define CSR_MDEAU                 0xBC0
+
+// Bounds the wait for the imprecise NMI after a locked read; the NMI ends it.
+#define NMI_WAIT_LIMIT 1000u
+
+// Written by the NMI handler. An NMI counts toward a read only while that read
+// has armed g_nmi_armed; any other NMI is stray.
+static volatile uint32_t g_nmi_armed;
+static volatile uint32_t g_nmi_count;
+static volatile uint32_t g_nmi_mcause;
+static volatile uint32_t g_nmi_mdseac;
+static volatile uint32_t g_nmi_stray;
+static volatile uint32_t g_nmi_stray_mcause;
+
+// Records the NMI and returns to the interrupted code. Writing mdeau unlocks
+// mdseac; until then the core raises no NMI for a later D-bus error.
+__attribute__((interrupt("machine"), aligned(4), used)) static void bl1_nmi_handler(void)
+{
+    uint32_t mcause, mdseac;
+    __asm__ volatile("csrr %0, mcause" : "=r"(mcause));
+    __asm__ volatile("csrr %0, %1" : "=r"(mdseac) : "i"(CSR_MDSEAC));
+    __asm__ volatile("csrw %0, zero" ::"i"(CSR_MDEAU));
+    if (!g_nmi_armed) {
+        g_nmi_stray++;
+        g_nmi_stray_mcause = mcause;
+        return;
+    }
+    g_nmi_count++;
+    g_nmi_mcause = mcause;
+    g_nmi_mdseac = mdseac;
+}
+
+// The vector takes the handler's run address, wherever the ROM placed BL1.
+static int bl1_nmi_init(void)
+{
+    uint32_t want;
+    __asm__ volatile("lla %0, bl1_nmi_handler" : "=r"(want));
+
+    mmio_write32(NMI_VEC_ADDR, want);
+    uint32_t got = mmio_read32(NMI_VEC_ADDR);
+    bl1_puts("NMI_VEC=");
+    bl1_puthex32(got);
+    bl1_puts("\n");
+    if (got != want) {
+        bl1_puts("FAIL:NMI_VEC=");
+        bl1_puthex32(got);
+        bl1_puts(" EXPECTED=");
+        bl1_puthex32(want);
+        bl1_puts("\n");
+        return 1;
+    }
+    mmio_write32(NMI_VEC_LOCK_ADDR, 1u);
+    return 0;
+}
 
 // Returns 0 if all secret fuse read-lock bits are set, nonzero on failure.
 static int bl1_verify_fuse_locks(void)
@@ -139,39 +195,105 @@ static int bl1_verify_fuse_locks(void)
     return 0;
 }
 
-// Verify that reading locked fields returns 0xBADCAB1E (proves no SLVERR)
+// Reads addr with the NMI expectation armed. The returned value is meaningful
+// only when no NMI arrived, since a faulting load does not write its register.
+static uint32_t bl1_bracketed_read(uint32_t addr)
+{
+    g_nmi_count = 0;
+    g_nmi_mcause = 0;
+    g_nmi_mdseac = 0;
+    g_nmi_armed = 1;
+    uint32_t val = mmio_read32(addr);
+    for (uint32_t i = 0; i < NMI_WAIT_LIMIT && g_nmi_count == 0; i++) {
+    }
+    g_nmi_armed = 0;
+    return val;
+}
+
+// Prints the NMIs a bracketed read of `field` took. Returns 0 if there was
+// exactly one, a load bus error at addr.
+static int bl1_grade_locked_read_nmi(const char *field, uint32_t addr)
+{
+    uint32_t n = g_nmi_count;
+    uint32_t mcause = g_nmi_mcause;
+    uint32_t mdseac = g_nmi_mdseac;
+
+    bl1_puts("LOCK_RD_NMI=");
+    bl1_puts(field);
+    bl1_puts(" N=");
+    bl1_puthex32(n);
+    bl1_puts(" MC=");
+    bl1_puthex32(mcause);
+    bl1_puts(" DSEAC=");
+    bl1_puthex32(mdseac);
+    bl1_puts("\n");
+
+    if (n != 1u) {
+        bl1_puts("FAIL:LOCK_RD_NMI_COUNT=");
+        bl1_puthex32(n);
+        bl1_puts("\n");
+        return 1;
+    }
+    if (mcause != MCAUSE_NMI_LOAD_BUS_ERROR) {
+        bl1_puts("FAIL:LOCK_RD_MCAUSE=");
+        bl1_puthex32(mcause);
+        bl1_puts(" EXPECTED=");
+        bl1_puthex32(MCAUSE_NMI_LOAD_BUS_ERROR);
+        bl1_puts("\n");
+        return 1;
+    }
+    if (mdseac != addr) {
+        bl1_puts("FAIL:LOCK_RD_DSEAC=");
+        bl1_puthex32(mdseac);
+        bl1_puts(" EXPECTED=");
+        bl1_puthex32(addr);
+        bl1_puts("\n");
+        return 1;
+    }
+    return 0;
+}
+
+// Returns 0 if no NMI has arrived outside a locked-field read.
+static int bl1_check_stray_nmi(void)
+{
+    if (g_nmi_stray == 0u)
+        return 0;
+    bl1_puts("FAIL:NMI_STRAY=");
+    bl1_puthex32(g_nmi_stray);
+    bl1_puts(" MC=");
+    bl1_puthex32(g_nmi_stray_mcause);
+    bl1_puts("\n");
+    return 1;
+}
+
+// Returns 0 if every read-locked field faults with its own address and no NMI
+// arrives outside a read. A read that takes no NMI prints the value it returned.
 static int bl1_test_locked_field_reads(void)
 {
-    uint32_t val;
+    static const struct {
+        const char *name;
+        uint32_t addr;
+    } fields[] = {
+        {"CLASS_KEY", CLASS_KEY_ADDR},
+        {"RMA_SIP_TOKEN_DIGEST", RMA_SIP_TOKEN_ADDR},
+        {"RMA_CHIPLET_TOKEN_DIGEST", RMA_CHIPLET_TOKEN_ADDR},
+    };
 
-    // Read CLASS_KEY (should be read-locked)
-    val = mmio_read32(CLASS_KEY_ADDR);
-    if (val != LOCKED_FIELD_READ_VALUE) {
-        bl1_puts("FAIL:CLASS_KEY=");
-        bl1_puthex32(val);
-        bl1_puts("\n");
-        return 1;
+    for (unsigned i = 0; i < sizeof(fields) / sizeof(fields[0]); i++) {
+        uint32_t val = bl1_bracketed_read(fields[i].addr);
+        if (g_nmi_count == 0u) {
+            bl1_puts("FAIL:");
+            bl1_puts(fields[i].name);
+            bl1_puts("=");
+            bl1_puthex32(val);
+            bl1_puts("\n");
+            return 1;
+        }
+        if (bl1_grade_locked_read_nmi(fields[i].name, fields[i].addr))
+            return 1;
     }
 
-    // Read RMA_SIP_TOKEN (should be read-locked)
-    val = mmio_read32(RMA_SIP_TOKEN_ADDR);
-    if (val != LOCKED_FIELD_READ_VALUE) {
-        bl1_puts("FAIL:RMA_SIP=");
-        bl1_puthex32(val);
-        bl1_puts("\n");
-        return 1;
-    }
-
-    // Read RMA_CHIPLET_TOKEN (should be read-locked)
-    val = mmio_read32(RMA_CHIPLET_TOKEN_ADDR);
-    if (val != LOCKED_FIELD_READ_VALUE) {
-        bl1_puts("FAIL:RMA_CHIP=");
-        bl1_puthex32(val);
-        bl1_puts("\n");
-        return 1;
-    }
-
-    return 0;  // Success - all reads returned expected value
+    return bl1_check_stray_nmi();
 }
 
 // ---------------------------------------------------------------------------
@@ -223,6 +345,16 @@ __attribute__((section(".text.init"))) void _start(void)
         *p = 0;
 
     bl1_puts("BL1\n");
+
+    // Every NMI from here on reaches bl1_nmi_handler, which needs .bss cleared.
+    if (bl1_nmi_init())
+    {
+        mbx_putw(FW_MAGIC0);
+        mbx_putw(0xDEADDEADu);
+        for (;;)
+            __asm__ volatile("wfi");
+    }
+
     bl1_outbound_filter_init();
 
     bl1_puts("OBF\n");
@@ -240,7 +372,6 @@ __attribute__((section(".text.init"))) void _start(void)
     }
     bl1_puts("FUSE_OK\n");
 
-    // Verify locked field reads return 0xBADCAB1E (not SLVERR)
     bl1_puts("LOCK_RD\n");
     int read_fail = bl1_test_locked_field_reads();
     if (read_fail) {
@@ -251,6 +382,14 @@ __attribute__((section(".text.init"))) void _start(void)
             __asm__ volatile("wfi");
     }
     bl1_puts("LOCK_RD_OK\n");
+
+    // Catches an NMI that arrives after the locked-read check returns.
+    if (bl1_check_stray_nmi()) {
+        mbx_putw(FW_MAGIC0);
+        mbx_putw(0xDEADDEADu);
+        for (;;)
+            __asm__ volatile("wfi");
+    }
 
     bl1_puts("GO!\n");
 
