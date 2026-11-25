@@ -106,15 +106,17 @@ static void bl1_puthex32(uint32_t val)
 #define EFUSE_LOCKS_ADDR 0x10930000u
 
 // Read-lock bit positions in the LOCKS register (same as ROM's fuse_lock.h):
-//   CLASS_KEY_READ_LOCK       = bit 15
-//   RMA_SOP_TOKEN_READ_LOCK   = bit 13
-//   RMA_CHIPLET_TOKEN_READ_LOCK = bit 11
+//   CLASS_KEY_READ_LOCK                 = bit 15
+//   RMA_CHIPLET_TOKEN_DIGEST_READ_LOCK  = bit 13
+//   RMA_SIP_TOKEN_DIGEST_READ_LOCK      = bit 11
 #define FUSE_SECRET_READ_LOCK_MASK 0x0000A800u
 
-// Locked field addresses for direct read verification
-#define CLASS_KEY_ADDR            0x10930064u
-#define RMA_SIP_TOKEN_ADDR        0x10930024u
-#define RMA_CHIPLET_TOKEN_ADDR    0x10930044u
+// First word of each locked field in the eFuse shadow map (sep_efuse_map.rdl:
+// RMA_SIP_TOKEN_DIGEST @0x28, RMA_CHIPLET_TOKEN_DIGEST @0x48, CLASS_KEY @0x68;
+// the harness copy of this test uses SEP_TOP_SEP_EFUSE_MAP_*_BASE_ADDR).
+#define CLASS_KEY_ADDR            0x10930068u
+#define RMA_SIP_TOKEN_ADDR        0x10930028u
+#define RMA_CHIPLET_TOKEN_ADDR    0x10930048u
 
 #define NMI_VEC_ADDR              0x10A30180u
 #define NMI_VEC_LOCK_ADDR         0x10A30188u
