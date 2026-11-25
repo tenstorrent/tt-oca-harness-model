@@ -276,9 +276,9 @@ static int bl1_test_locked_field_reads(void)
         const char *name;
         uint32_t addr;
     } fields[] = {
-        {"CLASS_KEY", CLASS_KEY_ADDR + 4u},
-        {"RMA_SIP_TOKEN_DIGEST", RMA_SIP_TOKEN_ADDR + 4u},
-        {"RMA_CHIPLET_TOKEN_DIGEST", RMA_CHIPLET_TOKEN_ADDR + 4u},
+        {"CLASS_KEY", CLASS_KEY_ADDR},
+        {"RMA_SIP_TOKEN_DIGEST", RMA_SIP_TOKEN_ADDR},
+        {"RMA_CHIPLET_TOKEN_DIGEST", RMA_CHIPLET_TOKEN_ADDR},
     };
 
     for (unsigned i = 0; i < sizeof(fields) / sizeof(fields[0]); i++) {
