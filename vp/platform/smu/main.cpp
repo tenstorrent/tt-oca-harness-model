@@ -82,6 +82,8 @@ void apply_ini_value(const std::string& key, const std::string& section,
         val = cci::cci_value(static_cast<int64_t>(std::strtoll(v.c_str(), nullptr, 0)));
     } else if (section == "uint") {
         val = cci::cci_value(static_cast<uint64_t>(std::strtoull(v.c_str(), nullptr, 0)));
+    } else if (section == "double" || section == "float") {
+        val = cci::cci_value(std::strtod(v.c_str(), nullptr));
     } else if (section == "string") {
         if (v.size() >= 2 && v.front() == '"' && v.back() == '"') v = v.substr(1, v.size() - 2);
         val = cci::cci_value(v);
